@@ -1,0 +1,589 @@
+/* ── Root ── */
+#yt-ab-looper-root {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 999999;
+  width: 320px;
+  border-radius: 12px;
+  background: rgba(20, 20, 24, 0.96);
+  color: #f5f5f7;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.32),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+#yt-ab-looper-root * {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* ── Tokens ── */
+#yt-ab-looper-root {
+  --bg: rgba(20, 20, 24, 0.96);
+  --panel: rgba(255, 255, 255, 0.04);
+  --panel-hover: rgba(255, 255, 255, 0.07);
+  --panel-strong: rgba(255, 255, 255, 0.09);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text: #f5f5f7;
+  --text-muted: #a1a1aa;
+  --text-soft: #71717a;
+  --accent: #7c8cff;
+  --accent-soft: rgba(124, 140, 255, 0.14);
+  --accent-hover: #93a0ff;
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.14);
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --transition: 160ms ease;
+}
+
+/* ── Collapsed ── */
+#yt-ab-looper-root.ytal-collapsed {
+  width: auto;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+#yt-ab-looper-root.ytal-collapsed:hover {
+  opacity: 1;
+}
+
+#yt-ab-looper-root.ytal-collapsed .ytal-body {
+  display: none !important;
+}
+
+#yt-ab-looper-root.ytal-collapsed .ytal-header {
+  border-bottom: none;
+  padding: 6px 8px;
+}
+
+#yt-ab-looper-root.ytal-collapsed .ytal-logo-icon {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+
+#yt-ab-looper-root.ytal-collapsed .ytal-title {
+  font-size: 12px;
+}
+
+#yt-ab-looper-root.ytal-collapsed .ytal-lang-select {
+  display: none;
+}
+
+#yt-ab-looper-root.ytal-collapsed .ytal-collapse-btn {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+
+/* ── Header ── */
+.ytal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ytal-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ytal-logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.ytal-title {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytal-collapse-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition),
+    transform var(--transition);
+}
+
+.ytal-collapse-btn:hover {
+  background: var(--panel);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.ytal-collapse-btn:active {
+  transform: scale(0.96);
+}
+
+.ytal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ytal-lang-select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 22px;
+  transition:
+    background-color var(--transition),
+    border-color var(--transition),
+    color var(--transition);
+}
+
+.ytal-lang-select:hover {
+  background-color: var(--panel);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.ytal-lang-select option {
+  background: #1a1a24;
+  color: #f5f5f7;
+}
+
+/* ── Body ── */
+.ytal-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+
+/* ── Time Display ── */
+.ytal-time-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+.ytal-time-block {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.ytal-time-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-soft);
+  margin-bottom: 6px;
+}
+
+.ytal-time-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.ytal-time-arrow {
+  color: var(--text-soft);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.ytal-time-len {
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+}
+
+/* ── Buttons ── */
+.ytal-btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ytal-btn {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition),
+    transform var(--transition),
+    box-shadow var(--transition);
+  text-align: center;
+}
+
+.ytal-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ytal-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ytal-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Primary action */
+.ytal-btn-a,
+.ytal-btn-b,
+.ytal-btn-save,
+.ytal-btn-loop {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.ytal-btn-a:hover:not(:disabled),
+.ytal-btn-b:hover:not(:disabled),
+.ytal-btn-save:hover:not(:disabled),
+.ytal-btn-loop:hover:not(:disabled) {
+  background: var(--panel-hover);
+  border-color: var(--border-strong);
+}
+
+/* Markers */
+.ytal-btn-a {
+  color: #e0e7ff;
+  border-color: rgba(124, 140, 255, 0.35);
+  background: rgba(124, 140, 255, 0.22);
+}
+
+.ytal-btn-a:hover:not(:disabled) {
+  background: rgba(124, 140, 255, 0.32);
+  border-color: rgba(124, 140, 255, 0.45);
+}
+
+.ytal-btn-b {
+  color: #fce7f3;
+  border-color: rgba(244, 114, 182, 0.3);
+  background: rgba(244, 114, 182, 0.18);
+}
+
+.ytal-btn-b:hover:not(:disabled) {
+  background: rgba(244, 114, 182, 0.28);
+  border-color: rgba(244, 114, 182, 0.42);
+}
+
+/* Loop */
+.ytal-btn-loop {
+  color: #d1fae5;
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(52, 211, 153, 0.18);
+}
+
+.ytal-btn-loop:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.28);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.ytal-btn-loop.active {
+  background: rgba(52, 211, 153, 0.3);
+  border-color: rgba(52, 211, 153, 0.5);
+  color: #ecfdf5;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.15), 0 8px 24px rgba(52, 211, 153, 0.15);
+}
+
+/* Save */
+.ytal-btn-save {
+  color: #fef3c7;
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.18);
+}
+
+.ytal-btn-save:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.28);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+/* Ghost */
+.ytal-btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: #ccc;
+}
+
+.ytal-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* ── Segment List ── */
+.ytal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ytal-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 12px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ytal-item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.ytal-item-main {
+  flex: 1;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform var(--transition),
+    box-shadow var(--transition);
+}
+
+.ytal-item-main:hover {
+  background: var(--panel-hover);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.ytal-item.active .ytal-item-main {
+  border-color: rgba(124, 140, 255, 0.32);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px rgba(124, 140, 255, 0.08);
+}
+
+.ytal-item-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.ytal-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.ytal-edit-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition);
+}
+
+.ytal-edit-btn:hover {
+  background: var(--panel-strong);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.ytal-item-time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.ytal-item-actions {
+  display: flex;
+  align-items: center;
+}
+
+.ytal-mini-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition),
+    transform var(--transition);
+}
+
+.ytal-mini-btn:hover {
+  background: var(--panel);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.ytal-mini-btn.delete:hover {
+  background: var(--danger-soft);
+  border-color: rgba(255, 107, 107, 0.28);
+  color: #ffd4d4;
+}
+
+/* ── Help ── */
+.ytal-help-toggle {
+  width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition);
+}
+
+.ytal-help-toggle:hover {
+  background: var(--panel);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.ytal-help-panel {
+  display: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.ytal-help-panel.open {
+  display: block;
+}
+
+.ytal-help-row {
+  color: var(--text-muted);
+}
+
+.ytal-help-panel kbd {
+  display: inline-block;
+  min-width: 40px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ── Copyright ── */
+.ytal-copyright {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-soft);
+  padding-top: 4px;
+}
+
+/* ── Scrollbar ── */
+.ytal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ytal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ytal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.ytal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

@@ -1,24 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Looper",
-  "version": "0.1.0",
-  "description": "유튜브에서 A-B 구간 반복을 도와주는 익스텐션",
-  "permissions": ["storage"],
+  "name": "YouTube AB Looper",
+  "version": "1.0.0",
+  "description": "유튜브에서 A-B 구간 반복과 구간 저장을 지원하는 익스텐션",
+  "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://www.youtube.com/*"],
   "action": {
-    "default_title": "YouTube Looper",
+    "default_title": "YouTube AB Looper",
     "default_popup": "popup.html"
   },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/watch*"],
       "js": ["content.js"],
-      "css": ["content.css"]
+      "css": ["content.css"],
+      "run_at": "document_idle"
     }
-  ],
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  }
+  ]
 }
