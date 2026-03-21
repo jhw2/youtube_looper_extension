@@ -1,17 +1,27 @@
 {
   "manifest_version": 3,
-  "name": "YouTube AB Looper",
-  "version": "1.0.0",
-  "description": "유튜브에서 A-B 구간 반복과 구간 저장을 지원하는 익스텐션",
+  "name": "YouTube Looper - A-B Repeat & Save Segments",
+  "version": "1.0.1",
+  "description": "유튜브 구간반복, AB 반복, 구간 저장을 지원하는 YouTube looper 익스텐션",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://www.youtube.com/*"],
   "action": {
-    "default_title": "YouTube AB Looper",
-    "default_popup": "popup.html"
+    "default_title": "YouTube Looper - A-B Repeat & Save Segments",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/watch*"],
+      "matches": ["https://www.youtube.com/*"],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"

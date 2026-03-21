@@ -18,6 +18,8 @@
   let lang = "en";
 
   let rootEl = null;
+  let placementFrame = null;
+  let hasWindowListeners = false;
 
   // ── i18n ──
   const i18n = {
@@ -104,6 +106,15 @@
   // ── Utilities ──
   function getVideo() {
     return document.querySelector("video");
+  }
+
+  function isWatchPage() {
+    try {
+      const url = new URL(location.href);
+      return url.pathname === "/watch" && !!url.searchParams.get("v");
+    } catch {
+      return false;
+    }
   }
 
   function getVideoId() {
@@ -534,6 +545,65 @@
     // styles are loaded from content.css via manifest
   }
 
+  function getPlayerContainer() {
+    return (
+      document.querySelector("#movie_player") ||
+      document.querySelector("#player") ||
+      document.querySelector("#player-container-outer")
+    );
+  }
+
+  function schedulePlacementUpdate() {
+    if (placementFrame !== null) return;
+
+    placementFrame = window.requestAnimationFrame(() => {
+      placementFrame = null;
+      updateRootPlacement();
+    });
+  }
+
+  function updateRootPlacement() {
+    if (!rootEl) return;
+
+    if (!isCollapsed) {
+      rootEl.classList.remove("ytal-docked");
+      rootEl.style.top = "80px";
+      rootEl.style.right = "20px";
+      rootEl.style.left = "auto";
+      rootEl.style.bottom = "auto";
+      return;
+    }
+
+    const playerEl = getPlayerContainer();
+    if (!playerEl) {
+      rootEl.classList.remove("ytal-docked");
+      rootEl.style.top = "80px";
+      rootEl.style.right = "20px";
+      rootEl.style.left = "auto";
+      rootEl.style.bottom = "auto";
+      return;
+    }
+
+    const rect = playerEl.getBoundingClientRect();
+    const collapsedWidth = rootEl.offsetWidth || 140;
+    const top = Math.max(16, rect.bottom + 12);
+    const left = Math.max(16, rect.right - collapsedWidth);
+
+    rootEl.classList.add("ytal-docked");
+    rootEl.style.top = `${top}px`;
+    rootEl.style.left = `${left}px`;
+    rootEl.style.right = "auto";
+    rootEl.style.bottom = "auto";
+  }
+
+  function bindWindowEvents() {
+    if (hasWindowListeners) return;
+    hasWindowListeners = true;
+
+    window.addEventListener("resize", schedulePlacementUpdate);
+    window.addEventListener("scroll", schedulePlacementUpdate, true);
+  }
+
   function createRoot() {
     const existing = document.getElementById("yt-ab-looper-root");
     if (existing) existing.remove();
@@ -617,6 +687,7 @@
     `;
 
     document.body.appendChild(rootEl);
+    schedulePlacementUpdate();
 
     document
       .getElementById("ytal-toggle-collapse")
@@ -625,6 +696,7 @@
         rootEl.classList.toggle("ytal-collapsed", isCollapsed);
         document.getElementById("ytal-toggle-collapse").innerHTML =
           isCollapsed ? "&#x25B2;" : "&#x25BC;";
+        schedulePlacementUpdate();
         await saveUiState();
       });
 
@@ -751,9 +823,8 @@
     }
   }
 
-  // ── Init ──
-  async function resetForVideoChange() {
-    currentVideoId = getVideoId();
+  function teardownRoot() {
+    stopWatcher();
     pointA = null;
     pointB = null;
     isLooping = false;
@@ -762,11 +833,22 @@
       rootEl.remove();
       rootEl = null;
     }
+  }
+
+  // ── Init ──
+  async function resetForVideoChange() {
+    currentVideoId = getVideoId();
+    teardownRoot();
+
+    if (!isWatchPage() || !currentVideoId) {
+      return;
+    }
 
     await loadUiState();
     createRoot();
     await renderSegments();
     updateUI();
+    startWatcher();
   }
 
   async function init() {
@@ -801,6 +883,8 @@
   }
 
   function waitForVideoAndInit() {
+    if (!isWatchPage()) return;
+
     let tries = 0;
 
     const timer = setInterval(async () => {
@@ -810,7 +894,6 @@
       if (video) {
         clearInterval(timer);
         await init();
-        watchUrlChange();
       }
 
       if (tries > 120) {
@@ -820,5 +903,7 @@
   }
 
   bindKeyboard();
+  bindWindowEvents();
+  watchUrlChange();
   waitForVideoAndInit();
 })();
