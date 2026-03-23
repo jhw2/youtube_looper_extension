@@ -216,49 +216,139 @@
   overflow-y: auto;
 }
 
-/* ── Time Display ── */
-.ytal-time-display {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* ── Timeline ── */
+.ytal-timeline-card {
   padding: 10px;
   border-radius: var(--radius-lg);
   background: var(--panel);
   border: 1px solid var(--border);
 }
 
-.ytal-time-block {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-}
-
-.ytal-time-label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-soft);
+.ytal-timeline-topbar {
+  display: flex;
+  justify-content: flex-end;
   margin-bottom: 6px;
 }
 
-.ytal-time-value {
-  font-size: 18px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+.ytal-reset-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition),
+    transform var(--transition);
+}
+
+.ytal-reset-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-strong);
   color: var(--text);
+  transform: translateY(-1px);
 }
 
-.ytal-time-arrow {
+.ytal-reset-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ytal-timeline-track {
+  position: relative;
+  width: 100%;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.ytal-timeline-track:hover {
+  box-shadow: 0 0 0 1px rgba(124, 140, 255, 0.18);
+}
+
+.ytal-timeline-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.2));
+}
+
+.ytal-timeline-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(124, 140, 255, 0.9), rgba(244, 114, 182, 0.8));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+.ytal-timeline-current {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(20, 20, 24, 0.55);
+  transform: translate(-50%, -50%);
+}
+
+.ytal-timeline-marker {
+  position: absolute;
+  top: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.ytal-timeline-marker.is-a {
+  background: #7c8cff;
+}
+
+.ytal-timeline-marker.is-b {
+  background: #f472b6;
+}
+
+.ytal-timeline-copy {
+  margin-top: 8px;
+}
+
+.ytal-timeline-status {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.ytal-timeline-status[data-tone="success"] {
+  color: #86efac;
+}
+
+.ytal-range-summary {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--text-soft);
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.ytal-time-len {
-  border-left: 1px solid var(--border);
-  padding-left: 10px;
 }
 
 /* ── Buttons ── */
@@ -269,6 +359,10 @@
 }
 
 .ytal-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 8px 10px;
@@ -283,6 +377,19 @@
     transform var(--transition),
     box-shadow var(--transition);
   text-align: center;
+}
+
+.ytal-btn-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ytal-btn-desc {
+  font-size: 11px;
+  line-height: 1.3;
+  color: inherit;
+  opacity: 0.76;
 }
 
 .ytal-btn:hover:not(:disabled) {
@@ -391,14 +498,33 @@
   gap: 6px;
 }
 
+.ytal-section-label {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
 .ytal-empty {
-  font-size: 13px;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 12px 8px;
+  padding: 12px 10px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
+}
+
+.ytal-empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.ytal-empty-copy {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .ytal-item {
@@ -596,4 +722,20 @@
 
 .ytal-body::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.ytal-native-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  display: none;
+  pointer-events: none;
+  z-index: 2;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(124, 140, 255, 0.5), rgba(244, 114, 182, 0.5));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.16) inset,
+    0 0 10px rgba(124, 140, 255, 0.16);
 }

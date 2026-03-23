@@ -12,29 +12,40 @@
   let isLooping = false;
   let intervalId = null;
   let currentVideoId = null;
+  let transientStatus = "";
+  let transientStatusTone = "neutral";
+  let transientStatusTimer = null;
 
   let isCollapsed = false;
   let isHelpOpen = false;
   let lang = "en";
 
   let rootEl = null;
+  let nativeRangeEl = null;
   let placementFrame = null;
   let hasWindowListeners = false;
 
   // ── i18n ──
   const i18n = {
     ko: {
-      setA: "A 설정",
-      setB: "B 설정",
-      loop: "루프",
-      looping: "루프 중...",
-      save: "저장",
-      pause: "일시정지",
-      clear: "초기화",
-      length: "길이",
+      timelineHint: "클릭해서 구간 선택",
+      timelineStatusEmpty: "재생바를 눌러 시작점 선택",
+      timelineStatusAwaitEnd: "한 번 더 눌러 끝점 선택",
+      timelineStatusReady: "다시 눌러 구간 조정",
+      resetSelection: "선택 리셋",
+      loop: "반복 하기",
+      looping: "반복 중...",
+      loopDesc: "선택 구간 바로 재생",
+      save: "목록에 저장",
+      saveDesc: "나중에 다시 불러오기",
+      rangeSummaryPending: "구간을 선택하면 여기에 시작과 끝 시간이 표시됩니다.",
+      rangeSummaryReady: (start, end) => `${start} ~ ${end}`,
+      savedNotice: "저장됨. 바로 반복하거나 다른 구간을 선택할 수 있어요.",
+      savedSegments: "저장한 구간",
       shortcuts: "단축키",
       hideShortcuts: "단축키 숨기기",
-      noSegments: "저장된 구간이 없습니다.",
+      noSegments: "아직 저장한 구간이 없습니다.",
+      emptyGuide: "영상 재생 중 A를 누르고, 끝나는 지점에서 B를 누른 뒤 루프나 저장을 사용해 보세요.",
       delete: "삭제",
       editTitle: "이름 수정",
       segmentDefault: (n) => `구간${n}`,
@@ -52,26 +63,32 @@
       helpLoad: "저장된 구간 불러오기",
       helpDelete: "활성 구간 삭제",
       helpStop: "루프 정지",
-      tipA: "단축키: A",
-      tipB: "단축키: B",
-      tipLoop: "단축키: L",
-      tipSave: "단축키: S",
-      tipPause: "Esc로 루프 정지",
-      tipClear: "A/B 초기화",
+      tipLoop: "반복 하기 (L)",
+      tipSave: "목록에 저장 (S)",
+      tipReset: "선택 리셋",
+      tipShortcuts: "단축키 보기",
+      tipCollapse: "패널 접기/펼치기",
       tipSegment: "단축키:",
     },
     en: {
-      setA: "Set A",
-      setB: "Set B",
-      loop: "Loop",
+      timelineHint: "Click to select range",
+      timelineStatusEmpty: "Click the bar to set the start",
+      timelineStatusAwaitEnd: "Click again to set the end",
+      timelineStatusReady: "Click again to adjust the range",
+      resetSelection: "Reset selection",
+      loop: "Play Loop",
       looping: "Looping...",
-      save: "Save",
-      pause: "Pause",
-      clear: "Clear",
-      length: "Length",
+      loopDesc: "Start looping this range",
+      save: "Save to List",
+      saveDesc: "Recall it later",
+      rangeSummaryPending: "Once you select a range, the start and end times will appear here.",
+      rangeSummaryReady: (start, end) => `${start} ~ ${end}`,
+      savedNotice: "Saved. Press 'Play Loop' to start looping it.",
+      savedSegments: "Saved Segments",
       shortcuts: "Shortcuts",
       hideShortcuts: "Hide Shortcuts",
-      noSegments: "No saved segments.",
+      noSegments: "No saved segments yet.",
+      emptyGuide: "While the video plays, mark A, then B at the ending point, then use Loop or Save.",
       delete: "Delete",
       editTitle: "Edit name",
       segmentDefault: (n) => `Segment ${n}`,
@@ -89,18 +106,104 @@
       helpLoad: "Load segment",
       helpDelete: "Delete active",
       helpStop: "Stop loop",
-      tipA: "Shortcut: A",
-      tipB: "Shortcut: B",
-      tipLoop: "Shortcut: L",
-      tipSave: "Shortcut: S",
-      tipPause: "Esc to stop loop",
-      tipClear: "Reset A/B",
+      tipLoop: "Play Loop (L)",
+      tipSave: "Save to List (S)",
+      tipReset: "Reset selection",
+      tipShortcuts: "Show shortcuts",
+      tipCollapse: "Collapse or expand panel",
       tipSegment: "Shortcut:",
     },
   };
 
   function t(key) {
     return i18n[lang][key] || i18n.en[key] || key;
+  }
+
+  function buttonMarkup(label, description) {
+    return `
+      <span class="ytal-btn-label">${label}</span>
+      <span class="ytal-btn-desc">${description}</span>
+    `;
+  }
+
+  function syncButtonMarkup(button, label, description) {
+    if (!button) return;
+    if (
+      button.dataset.label === label &&
+      button.dataset.description === description
+    ) {
+      return;
+    }
+
+    button.dataset.label = label;
+    button.dataset.description = description;
+    button.innerHTML = buttonMarkup(label, description);
+  }
+
+  function getTimelineRatio(time, duration) {
+    if (!duration || !Number.isFinite(duration) || duration <= 0) return 0;
+    return Math.max(0, Math.min(time / duration, 1));
+  }
+
+  function getTimelineStatus() {
+    if (transientStatus) return transientStatus;
+    if (typeof pointA !== "number") return t("timelineStatusEmpty");
+    if (typeof pointB !== "number" || pointB <= pointA) {
+      return t("timelineStatusAwaitEnd");
+    }
+    return t("timelineStatusReady");
+  }
+
+  function showTransientStatus(message, tone = "neutral", durationMs = 2400) {
+    transientStatus = message;
+    transientStatusTone = tone;
+
+    if (transientStatusTimer !== null) {
+      window.clearTimeout(transientStatusTimer);
+    }
+
+    transientStatusTimer = window.setTimeout(() => {
+      transientStatus = "";
+      transientStatusTone = "neutral";
+      transientStatusTimer = null;
+      updateUI();
+    }, durationMs);
+
+    updateUI();
+  }
+
+  function setPointFromTimeline(time) {
+    transientStatus = "";
+    transientStatusTone = "neutral";
+    if (typeof pointA !== "number") {
+      pointA = time;
+      pointB = null;
+      stopLoop();
+      updateUI();
+      renderSegments();
+      return;
+    }
+
+    if (typeof pointB !== "number" || pointB <= pointA) {
+      pointB = Math.max(time, pointA + MIN_GAP);
+      stopLoop();
+      updateUI();
+      renderSegments();
+      return;
+    }
+
+    const distanceToA = Math.abs(time - pointA);
+    const distanceToB = Math.abs(time - pointB);
+
+    if (distanceToA <= distanceToB) {
+      pointA = Math.min(time, pointB - MIN_GAP);
+    } else {
+      pointB = Math.max(time, pointA + MIN_GAP);
+    }
+
+    stopLoop();
+    updateUI();
+    renderSegments();
   }
 
   // ── Utilities ──
@@ -224,6 +327,8 @@
   }
 
   function clearCurrentSelection() {
+    transientStatus = "";
+    transientStatusTone = "neutral";
     pointA = null;
     pointB = null;
     stopLoop();
@@ -266,6 +371,8 @@
     const video = getVideo();
     if (!video) return;
 
+    transientStatus = "";
+    transientStatusTone = "neutral";
     pointA = video.currentTime;
     pointB = null;
     stopLoop();
@@ -282,6 +389,8 @@
       return;
     }
 
+    transientStatus = "";
+    transientStatusTone = "neutral";
     pointB = video.currentTime;
 
     if (pointB <= pointA) {
@@ -317,6 +426,7 @@
 
     await renderSegments();
     updateUI();
+    showTransientStatus(t("savedNotice"), "success");
   }
 
   async function deleteSegment(id) {
@@ -401,7 +511,12 @@
     const segments = await getCurrentVideoSegments();
 
     if (segments.length === 0) {
-      list.innerHTML = `<div class="ytal-empty">${t("noSegments")}</div>`;
+      list.innerHTML = `
+        <div class="ytal-empty">
+          <div class="ytal-empty-title">${t("noSegments")}</div>
+          <div class="ytal-empty-copy">${t("emptyGuide")}</div>
+        </div>
+      `;
       return;
     }
 
@@ -465,62 +580,109 @@
   function updateUI() {
     if (!rootEl) return;
 
-    const aValue = document.getElementById("ytal-a-value");
-    const bValue = document.getElementById("ytal-b-value");
-    const lenValue = document.getElementById("ytal-len-value");
     const loopBtn = document.getElementById("ytal-loop-btn");
     const saveBtn = document.getElementById("ytal-save-btn");
     const helpBtn = document.getElementById("ytal-help-toggle");
     const helpPanel = document.getElementById("ytal-help-panel");
     const langSelect = document.getElementById("ytal-lang-select");
-
-    if (aValue) {
-      aValue.textContent =
-        typeof pointA === "number" ? formatPrecise(pointA) : "-";
-    }
-
-    if (bValue) {
-      bValue.textContent =
-        typeof pointB === "number" ? formatPrecise(pointB) : "-";
-    }
+    const timelineFill = document.getElementById("ytal-timeline-fill");
+    const timelineRange = document.getElementById("ytal-timeline-range");
+    const timelineCurrent = document.getElementById("ytal-timeline-current");
+    const timelineMarkerA = document.getElementById("ytal-marker-a");
+    const timelineMarkerB = document.getElementById("ytal-marker-b");
+    const timelineStatus = document.getElementById("ytal-timeline-status");
+    const timelineTrack = document.getElementById("ytal-timeline-track");
+    const rangeSummary = document.getElementById("ytal-range-summary");
+    const resetBtn = document.getElementById("ytal-reset-selection");
+    const video = getVideo();
+    const duration = video?.duration || 0;
+    const currentTime = video?.currentTime || 0;
+    const currentRatio = getTimelineRatio(currentTime, duration);
+    const pointARatio =
+      typeof pointA === "number" ? getTimelineRatio(pointA, duration) : 0;
+    const pointBRatio =
+      typeof pointB === "number" ? getTimelineRatio(pointB, duration) : 0;
 
     const canLoop =
       typeof pointA === "number" &&
       typeof pointB === "number" &&
       pointB > pointA;
 
-    if (lenValue) {
-      lenValue.textContent = canLoop ? formatPrecise(pointB - pointA) : "-";
+    if (rangeSummary) {
+      rangeSummary.textContent = canLoop
+        ? t("rangeSummaryReady")(format(pointA), format(pointB))
+        : t("rangeSummaryPending");
+    }
+
+    if (timelineFill) {
+      timelineFill.style.width = `${currentRatio * 100}%`;
+    }
+
+    if (timelineCurrent) {
+      timelineCurrent.style.left = `${currentRatio * 100}%`;
+    }
+
+    if (timelineRange) {
+      if (canLoop) {
+        timelineRange.style.display = "block";
+        timelineRange.style.left = `${pointARatio * 100}%`;
+        timelineRange.style.width = `${Math.max((pointBRatio - pointARatio) * 100, 0)}%`;
+      } else {
+        timelineRange.style.display = "none";
+      }
+    }
+
+    if (timelineMarkerA) {
+      timelineMarkerA.style.display = typeof pointA === "number" ? "flex" : "none";
+      timelineMarkerA.style.left = `${pointARatio * 100}%`;
+    }
+
+    if (timelineMarkerB) {
+      timelineMarkerB.style.display = typeof pointB === "number" ? "flex" : "none";
+      timelineMarkerB.style.left = `${pointBRatio * 100}%`;
+    }
+
+    if (timelineStatus) {
+      timelineStatus.textContent = getTimelineStatus();
+      timelineStatus.dataset.tone = transientStatus ? transientStatusTone : "neutral";
+    }
+
+    if (timelineTrack) {
+      timelineTrack.setAttribute("aria-label", t("timelineHint"));
+      timelineTrack.setAttribute("aria-valuemin", "0");
+      timelineTrack.setAttribute("aria-valuemax", String(Math.round(duration || 0)));
+      timelineTrack.setAttribute("aria-valuenow", String(Math.round(currentTime)));
+    }
+
+    if (resetBtn) {
+      resetBtn.title = t("tipReset");
+      resetBtn.setAttribute("aria-label", t("resetSelection"));
+      resetBtn.disabled = typeof pointA !== "number" && typeof pointB !== "number";
     }
 
     if (loopBtn) {
-      loopBtn.textContent = isLooping ? t("looping") : t("loop");
+      syncButtonMarkup(
+        loopBtn,
+        isLooping ? t("looping") : t("loop"),
+        t("loopDesc")
+      );
       loopBtn.disabled = !canLoop;
       loopBtn.classList.toggle("active", isLooping);
     }
 
     if (saveBtn) {
-      saveBtn.textContent = t("save");
+      syncButtonMarkup(saveBtn, t("save"), t("saveDesc"));
       saveBtn.disabled = !canLoop;
     }
 
-    // Update button labels
-    const setABtn = document.getElementById("ytal-set-a-btn");
-    const setBBtn = document.getElementById("ytal-set-b-btn");
-    const stopBtn = document.getElementById("ytal-stop-btn");
-    const clearBtn = document.getElementById("ytal-clear-btn");
-    const lenLabel = document.getElementById("ytal-len-label");
+    updateNativeTimelineOverlay(canLoop, duration);
 
-    if (setABtn) { setABtn.textContent = t("setA"); setABtn.title = t("tipA"); }
-    if (setBBtn) { setBBtn.textContent = t("setB"); setBBtn.title = t("tipB"); }
-    if (stopBtn) { stopBtn.textContent = t("pause"); stopBtn.title = t("tipPause"); }
-    if (clearBtn) { clearBtn.textContent = t("clear"); clearBtn.title = t("tipClear"); }
     if (loopBtn) loopBtn.title = t("tipLoop");
     if (saveBtn) saveBtn.title = t("tipSave");
-    if (lenLabel) lenLabel.textContent = t("length");
 
     if (helpBtn) {
       helpBtn.textContent = isHelpOpen ? t("hideShortcuts") : t("shortcuts");
+      helpBtn.title = t("tipShortcuts");
     }
 
     if (helpPanel) {
@@ -551,6 +713,50 @@
       document.querySelector("#player") ||
       document.querySelector("#player-container-outer")
     );
+  }
+
+  function getNativeTimelineHost() {
+    return (
+      document.querySelector(".ytp-progress-list") ||
+      document.querySelector(".ytp-progress-bar-container")
+    );
+  }
+
+  function ensureNativeTimelineOverlay() {
+    const host = getNativeTimelineHost();
+    if (!host) return null;
+
+    if (nativeRangeEl && nativeRangeEl.parentElement !== host) {
+      nativeRangeEl.remove();
+      nativeRangeEl = null;
+    }
+
+    if (!nativeRangeEl) {
+      nativeRangeEl = document.createElement("div");
+      nativeRangeEl.className = "ytal-native-range";
+      host.appendChild(nativeRangeEl);
+    }
+
+    return nativeRangeEl;
+  }
+
+  function updateNativeTimelineOverlay(canLoop, duration) {
+    if (!canLoop || !duration) {
+      if (nativeRangeEl) {
+        nativeRangeEl.style.display = "none";
+      }
+      return;
+    }
+
+    const overlay = ensureNativeTimelineOverlay();
+    if (!overlay) return;
+
+    const startRatio = getTimelineRatio(pointA, duration);
+    const endRatio = getTimelineRatio(pointB, duration);
+
+    overlay.style.display = "block";
+    overlay.style.left = `${startRatio * 100}%`;
+    overlay.style.width = `${Math.max((endRatio - startRatio) * 100, 0)}%`;
   }
 
   function schedulePlacementUpdate() {
@@ -628,32 +834,28 @@
             <option value="ko" ${lang === "ko" ? "selected" : ""}>한국어</option>
             <option value="en" ${lang === "en" ? "selected" : ""}>English</option>
           </select>
-          <button class="ytal-collapse-btn" id="ytal-toggle-collapse">
-            ${isCollapsed ? "&#x25B2;" : "&#x25BC;"}
-          </button>
+            <button class="ytal-collapse-btn" id="ytal-toggle-collapse" title="${t("tipCollapse")}" aria-label="${t("tipCollapse")}">
+              ${isCollapsed ? "&#x25B2;" : "&#x25BC;"}
+            </button>
         </div>
       </div>
 
       <div class="ytal-body">
-        <div class="ytal-time-display">
-          <div class="ytal-time-block">
-            <div class="ytal-time-label">A</div>
-            <div class="ytal-time-value" id="ytal-a-value">-</div>
+        <div class="ytal-timeline-card">
+          <div class="ytal-timeline-topbar">
+            <button class="ytal-reset-btn" id="ytal-reset-selection" type="button" title="${t("tipReset")}" aria-label="${t("resetSelection")}">&#x21ba;</button>
           </div>
-          <div class="ytal-time-arrow">&#x2192;</div>
-          <div class="ytal-time-block">
-            <div class="ytal-time-label">B</div>
-            <div class="ytal-time-value" id="ytal-b-value">-</div>
+          <button class="ytal-timeline-track" id="ytal-timeline-track" type="button" aria-label="${t("timelineHint")}" role="slider">
+            <span class="ytal-timeline-fill" id="ytal-timeline-fill"></span>
+            <span class="ytal-timeline-range" id="ytal-timeline-range"></span>
+            <span class="ytal-timeline-current" id="ytal-timeline-current"></span>
+            <span class="ytal-timeline-marker is-a" id="ytal-marker-a">A</span>
+            <span class="ytal-timeline-marker is-b" id="ytal-marker-b">B</span>
+          </button>
+          <div class="ytal-timeline-copy">
+            <div class="ytal-timeline-status" id="ytal-timeline-status">${getTimelineStatus()}</div>
           </div>
-          <div class="ytal-time-block ytal-time-len">
-            <div class="ytal-time-label" id="ytal-len-label">${t("length")}</div>
-            <div class="ytal-time-value" id="ytal-len-value">-</div>
-          </div>
-        </div>
-
-        <div class="ytal-btn-row">
-          <button class="ytal-btn ytal-btn-a" id="ytal-set-a-btn" title="${t("tipA")}">${t("setA")}</button>
-          <button class="ytal-btn ytal-btn-b" id="ytal-set-b-btn" title="${t("tipB")}">${t("setB")}</button>
+          <div class="ytal-range-summary" id="ytal-range-summary">${t("rangeSummaryPending")}</div>
         </div>
 
         <div class="ytal-btn-row">
@@ -661,14 +863,10 @@
           <button class="ytal-btn ytal-btn-save" id="ytal-save-btn" title="${t("tipSave")}">${t("save")}</button>
         </div>
 
-        <div class="ytal-btn-row">
-          <button class="ytal-btn ytal-btn-ghost" id="ytal-stop-btn" title="${t("tipPause")}">${t("pause")}</button>
-          <button class="ytal-btn ytal-btn-ghost" id="ytal-clear-btn" title="${t("tipClear")}">${t("clear")}</button>
-        </div>
-
+        <div class="ytal-section-label">${t("savedSegments")}</div>
         <div id="ytal-segment-list" class="ytal-list"></div>
 
-        <button class="ytal-help-toggle" id="ytal-help-toggle">
+        <button class="ytal-help-toggle" id="ytal-help-toggle" title="${t("tipShortcuts")}">
           ${isHelpOpen ? t("hideShortcuts") : t("shortcuts")}
         </button>
 
@@ -710,33 +908,33 @@
       });
 
     document
-      .getElementById("ytal-set-a-btn")
-      .addEventListener("click", setPointAToCurrent);
+      .getElementById("ytal-timeline-track")
+      .addEventListener("click", (e) => {
+        const video = getVideo();
+        if (!video || !video.duration) return;
 
-    document
-      .getElementById("ytal-set-b-btn")
-      .addEventListener("click", setPointBToCurrent);
+        const rect = e.currentTarget.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
+        const nextTime = ratio * video.duration;
+        seekTo(nextTime);
+        setPointFromTimeline(nextTime);
+      });
 
     document
       .getElementById("ytal-loop-btn")
       .addEventListener("click", toggleLoop);
 
-    document.getElementById("ytal-stop-btn").addEventListener("click", () => {
-      const video = getVideo();
-      if (!video) return;
-      video.pause();
-      stopLoop();
-    });
-
     document
       .getElementById("ytal-save-btn")
       .addEventListener("click", saveSegment);
 
-    document.getElementById("ytal-clear-btn").addEventListener("click", () => {
-      clearCurrentSelection();
-      updateUI();
-      renderSegments();
-    });
+    document
+      .getElementById("ytal-reset-selection")
+      .addEventListener("click", () => {
+        clearCurrentSelection();
+        updateUI();
+        renderSegments();
+      });
 
     document
       .getElementById("ytal-help-toggle")
@@ -813,6 +1011,8 @@
         video.currentTime = pointA;
         video.play().catch(() => {});
       }
+
+      updateUI();
     }, LOOP_INTERVAL_MS);
   }
 
@@ -828,6 +1028,11 @@
     pointA = null;
     pointB = null;
     isLooping = false;
+
+    if (nativeRangeEl) {
+      nativeRangeEl.remove();
+      nativeRangeEl = null;
+    }
 
     if (rootEl) {
       rootEl.remove();
