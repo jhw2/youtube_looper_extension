@@ -3,15 +3,15 @@ const STORAGE_UI_KEY = "yt-ab-looper-ui";
 const texts = {
   ko: {
     title: "유튜브 구간 반복을 바로 시작하세요",
-    desc: "영상에서 A와 B를 찍고 원하는 구간만 반복하거나 저장할 수 있어요.",
+    desc: "A·B 마커를 드래그해 구간을 정하고, 원하는 부분만 반복하거나 저장할 수 있어요.",
     steps: [
       {
         title: "YouTube 영상 열기",
         copy: "반복하고 싶은 영상을 열면 오른쪽 위에 AB Loop 패널이 나타나요.",
       },
       {
-        title: "A와 B 지점 찍기",
-        copy: "시작 지점에서 A, 끝 지점에서 B를 눌러 반복 범위를 정하세요.",
+        title: "A·B 마커 드래그하기",
+        copy: "재생바의 A·B 마커를 드래그해 반복 구간을 조정하세요. 키보드 A·B 키도 사용할 수 있어요.",
       },
       {
         title: "Loop 또는 Save 사용",
@@ -26,15 +26,15 @@ const texts = {
   },
   en: {
     title: "Start looping YouTube segments right away",
-    desc: "Pick point A and B on a video, then loop or save the exact part you want.",
+    desc: "Drag the A·B markers to set your range, then loop or save the exact part you want.",
     steps: [
       {
         title: "Open a YouTube video",
         copy: "The AB Loop panel appears on the top-right of the watch page.",
       },
       {
-        title: "Mark point A and B",
-        copy: "Press A where the loop should start and B where it should end.",
+        title: "Drag the A·B markers",
+        copy: "Drag A and B on the timeline to set your loop range. You can also use the A and B keys.",
       },
       {
         title: "Loop or save it",
@@ -49,9 +49,21 @@ const texts = {
   },
 };
 
+function detectDefaultLang() {
+  const browserLang =
+    chrome.i18n?.getUILanguage?.() ||
+    navigator.language ||
+    navigator.languages?.[0] ||
+    "en";
+  return browserLang.toLowerCase().startsWith("ko") ? "ko" : "en";
+}
+
 chrome.storage.local.get([STORAGE_UI_KEY], (result) => {
   const store = result[STORAGE_UI_KEY] || {};
-  const lang = store.lang === "ko" ? "ko" : "en";
+  const lang =
+    store.lang === "ko" || store.lang === "en"
+      ? store.lang
+      : detectDefaultLang();
 
   document.getElementById("popup-title").textContent = texts[lang].title;
   document.getElementById("popup-desc").textContent = texts[lang].desc;

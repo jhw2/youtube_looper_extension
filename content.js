@@ -6,32 +6,49 @@
   const STORAGE_UI_KEY = "yt-ab-looper-ui";
   const LOOP_INTERVAL_MS = 120;
   const MIN_GAP = 0.1;
+  const PLAYBACK_RATE_STEP = 0.05;
+  const PANEL_TRANSITION_MS = 260;
+  const FULLSCREEN_PEEK_HIDE_MS = 2400;
 
   let pointA = null;
   let pointB = null;
+  let activeSegmentId = null;
   let isLooping = false;
   let intervalId = null;
   let currentVideoId = null;
+  let defaultPlaybackRate = 1;
+  let restorePlaybackRate = null;
   let transientStatus = "";
   let transientStatusTone = "neutral";
   let transientStatusTimer = null;
+  let toastMessage = "";
+  let toastTone = "neutral";
+  let toastTimer = null;
+  let fullscreenPeekTimer = null;
 
   let isCollapsed = false;
   let isHelpOpen = false;
   let lang = "en";
 
   let rootEl = null;
+  let toastEl = null;
+  let inlineLauncherEl = null;
   let nativeRangeEl = null;
+  let nativeMarkerAEl = null;
+  let nativeMarkerBEl = null;
   let placementFrame = null;
   let hasWindowListeners = false;
+  let dragMode = null; // 'markerA' | 'markerB'
+  let rootMountEl = null;
+  let isFullscreenPeekVisible = false;
 
   // ── i18n ──
   const i18n = {
     ko: {
-      timelineHint: "클릭해서 구간 선택",
-      timelineStatusEmpty: "재생바를 눌러 시작점 선택",
-      timelineStatusAwaitEnd: "한 번 더 눌러 끝점 선택",
-      timelineStatusReady: "다시 눌러 구간 조정",
+      timelineHint: "마커를 드래그해서 구간 조정",
+      timelineStatusEmpty: "A·B 마커를 드래그해서 구간을 설정하세요",
+      timelineStatusAwaitEnd: "B 마커를 드래그해서 끝점을 설정하세요",
+      timelineStatusReady: "마커를 드래그해서 구간 조정",
       resetSelection: "선택 리셋",
       loop: "반복 하기",
       looping: "반복 중...",
@@ -41,13 +58,27 @@
       rangeSummaryPending: "구간을 선택하면 여기에 시작과 끝 시간이 표시됩니다.",
       rangeSummaryReady: (start, end) => `${start} ~ ${end}`,
       savedNotice: "저장됨. 바로 반복하거나 다른 구간을 선택할 수 있어요.",
+      toastPointA: (time) => `루프 시작 구간을 찍었어요. A = ${time}`,
+      toastPointB: (time) => `루프 끝 구간을 찍었어요. B = ${time}`,
+      toastSegmentSaved: (title, start, end, shortcut) =>
+        shortcut
+          ? `${title} 구간을 저장했어요. ${start} ~ ${end} · 불러오기는 ${shortcut} · 배속은 + / -`
+          : `${title} 구간을 저장했어요. ${start} ~ ${end} · 배속은 + / -`,
+      toastSegmentExists: (index, title, start, end) =>
+        `이미 저장된 구간이에요. ${index}번 ${title} · ${start} ~ ${end}`,
+      toastLoopOn: (start, end) => `AB 루프를 시작했어요. ${start} ~ ${end}`,
+      toastLoopOff: "AB 루프를 멈췄어요.",
+      toastShortcutsIntro: "단축키: A (시작), B (끝), L (루프), S (저장), + / - (구간 배속)",
       savedSegments: "저장한 구간",
       shortcuts: "단축키",
       hideShortcuts: "단축키 숨기기",
       noSegments: "아직 저장한 구간이 없습니다.",
-      emptyGuide: "영상 재생 중 A를 누르고, 끝나는 지점에서 B를 누른 뒤 루프나 저장을 사용해 보세요.",
+      emptyGuide: "재생바의 A·B 마커를 드래그하거나 키보드 A·B 키로 구간을 설정한 뒤 루프나 저장을 사용해 보세요.",
       delete: "삭제",
       editTitle: "이름 수정",
+      speedDown: "배속 낮추기",
+      speedUp: "배속 높이기",
+      speedValue: (value) => `${value}x`,
       segmentDefault: (n) => `구간${n}`,
       alertSetAB: "A와 B를 먼저 올바르게 설정해 주세요.",
       alertSetA: "먼저 A 지점을 설정해 주세요.",
@@ -61,20 +92,27 @@
       helpLoop: "루프 켜기/끄기",
       helpSave: "구간 저장",
       helpLoad: "저장된 구간 불러오기",
+      helpSpeed: "활성 구간 배속 조절",
       helpDelete: "활성 구간 삭제",
       helpStop: "루프 정지",
       tipLoop: "반복 하기 (L)",
       tipSave: "목록에 저장 (S)",
       tipReset: "선택 리셋",
+      tipPanelOpen: "저장 구간 패널 열기",
+      tipPanelClose: "패널 숨기기",
+      tipList: "저장 구간 보기",
       tipShortcuts: "단축키 보기",
-      tipCollapse: "패널 접기/펼치기",
+      tipCollapse: "패널 숨기기",
+      tipExpand: "패널 열기",
+      hiddenTab: "AB 열기",
+      hiddenInline: "AB Loop",
       tipSegment: "단축키:",
     },
     en: {
-      timelineHint: "Click to select range",
-      timelineStatusEmpty: "Click the bar to set the start",
-      timelineStatusAwaitEnd: "Click again to set the end",
-      timelineStatusReady: "Click again to adjust the range",
+      timelineHint: "Drag markers to adjust range",
+      timelineStatusEmpty: "Drag the A·B markers to set your range",
+      timelineStatusAwaitEnd: "Drag the B marker to set the end",
+      timelineStatusReady: "Drag markers to adjust the range",
       resetSelection: "Reset selection",
       loop: "Play Loop",
       looping: "Looping...",
@@ -84,13 +122,27 @@
       rangeSummaryPending: "Once you select a range, the start and end times will appear here.",
       rangeSummaryReady: (start, end) => `${start} ~ ${end}`,
       savedNotice: "Saved. Press 'Play Loop' to start looping it.",
+      toastPointA: (time) => `Loop start marked. A = ${time}`,
+      toastPointB: (time) => `Loop end marked. B = ${time}`,
+      toastSegmentSaved: (title, start, end, shortcut) =>
+        shortcut
+          ? `Saved ${title}. ${start} ~ ${end}. Load: ${shortcut}. Speed: + / -`
+          : `Saved ${title}. ${start} ~ ${end}. Speed: + / -`,
+      toastSegmentExists: (index, title, start, end) =>
+        `This range is already saved as ${index}. ${title} · ${start} ~ ${end}`,
+      toastLoopOn: (start, end) => `AB loop started. ${start} ~ ${end}`,
+      toastLoopOff: "AB loop stopped.",
+      toastShortcutsIntro: "Shortcuts: A (start), B (end), L (loop), S (save), + / - (segment speed)",
       savedSegments: "Saved Segments",
       shortcuts: "Shortcuts",
       hideShortcuts: "Hide Shortcuts",
       noSegments: "No saved segments yet.",
-      emptyGuide: "While the video plays, mark A, then B at the ending point, then use Loop or Save.",
+      emptyGuide: "Drag the A·B markers on the timeline, or use the A and B keys, to set your range, then use Loop or Save.",
       delete: "Delete",
       editTitle: "Edit name",
+      speedDown: "Decrease speed",
+      speedUp: "Increase speed",
+      speedValue: (value) => `${value}x`,
       segmentDefault: (n) => `Segment ${n}`,
       alertSetAB: "Please set A and B points first.",
       alertSetA: "Please set point A first.",
@@ -104,19 +156,35 @@
       helpLoop: "Toggle loop",
       helpSave: "Save segment",
       helpLoad: "Load segment",
+      helpSpeed: "Adjust active segment speed",
       helpDelete: "Delete active",
       helpStop: "Stop loop",
       tipLoop: "Play Loop (L)",
       tipSave: "Save to List (S)",
       tipReset: "Reset selection",
+      tipPanelOpen: "Open saved segments panel",
+      tipPanelClose: "Hide panel",
+      tipList: "Show saved segments",
       tipShortcuts: "Show shortcuts",
-      tipCollapse: "Collapse or expand panel",
+      tipCollapse: "Hide panel",
+      tipExpand: "Open panel",
+      hiddenTab: "Open AB Loop",
+      hiddenInline: "AB Loop",
       tipSegment: "Shortcut:",
     },
   };
 
   function t(key) {
     return i18n[lang][key] || i18n.en[key] || key;
+  }
+
+  function detectDefaultLang() {
+    const browserLang =
+      chrome.i18n?.getUILanguage?.() ||
+      navigator.language ||
+      navigator.languages?.[0] ||
+      "en";
+    return browserLang.toLowerCase().startsWith("ko") ? "ko" : "en";
   }
 
   function buttonMarkup(label, description) {
@@ -172,39 +240,24 @@
     updateUI();
   }
 
-  function setPointFromTimeline(time) {
-    transientStatus = "";
-    transientStatusTone = "neutral";
-    if (typeof pointA !== "number") {
-      pointA = time;
-      pointB = null;
-      stopLoop();
+  function showToast(message, tone = "neutral", durationMs = 2200) {
+    toastMessage = message;
+    toastTone = tone;
+
+    if (toastTimer !== null) {
+      window.clearTimeout(toastTimer);
+    }
+
+    toastTimer = window.setTimeout(() => {
+      toastMessage = "";
+      toastTone = "neutral";
+      toastTimer = null;
       updateUI();
-      renderSegments();
-      return;
-    }
+    }, durationMs);
 
-    if (typeof pointB !== "number" || pointB <= pointA) {
-      pointB = Math.max(time, pointA + MIN_GAP);
-      stopLoop();
-      updateUI();
-      renderSegments();
-      return;
-    }
-
-    const distanceToA = Math.abs(time - pointA);
-    const distanceToB = Math.abs(time - pointB);
-
-    if (distanceToA <= distanceToB) {
-      pointA = Math.min(time, pointB - MIN_GAP);
-    } else {
-      pointB = Math.max(time, pointA + MIN_GAP);
-    }
-
-    stopLoop();
     updateUI();
-    renderSegments();
   }
+
 
   // ── Utilities ──
   function getVideo() {
@@ -239,6 +292,87 @@
   function formatPrecise(seconds) {
     if (typeof seconds !== "number" || Number.isNaN(seconds)) return "-";
     return `${seconds.toFixed(1)}s`;
+  }
+
+  function normalizePlaybackRate(value) {
+    const rate = Number(value);
+    if (!Number.isFinite(rate)) return 1;
+    return Math.min(16, Math.max(0.05, Math.round(rate / PLAYBACK_RATE_STEP) * PLAYBACK_RATE_STEP));
+  }
+
+  function getPlaybackRateLabel(value) {
+    return t("speedValue")(normalizePlaybackRate(value).toFixed(2).replace(/\.?0+$/, ""));
+  }
+
+  function getSegmentPlaybackRate(segment) {
+    return normalizePlaybackRate(segment?.playbackRate ?? 1);
+  }
+
+  function isSegmentActive(segment) {
+    return (
+      !!segment &&
+      activeSegmentId === segment.id &&
+      typeof pointA === "number" &&
+      typeof pointB === "number" &&
+      pointA === segment.start &&
+      pointB === segment.end
+    );
+  }
+
+  async function setSegmentPlaybackRate(id, direction) {
+    const segments = await getCurrentVideoSegments();
+    const index = segments.findIndex((segment) => segment.id === id);
+    if (index === -1) return;
+
+    const currentRate = getSegmentPlaybackRate(segments[index]);
+    const nextRate = normalizePlaybackRate(currentRate + PLAYBACK_RATE_STEP * direction);
+
+    if (nextRate === currentRate) return;
+
+    segments[index] = {
+      ...segments[index],
+      playbackRate: nextRate,
+    };
+
+    await saveCurrentVideoSegments(segments);
+
+    const isActive =
+      typeof pointA === "number" &&
+      typeof pointB === "number" &&
+      pointA === segments[index].start &&
+      pointB === segments[index].end;
+
+    if (isActive) {
+      applyPlaybackRate(segments[index].playbackRate);
+    }
+
+    await renderSegments();
+    updateUI();
+  }
+
+  async function setActiveSegmentPlaybackRate(direction) {
+    if (
+      typeof pointA !== "number" ||
+      typeof pointB !== "number" ||
+      pointB <= pointA
+    ) {
+      return;
+    }
+
+    const segments = await getCurrentVideoSegments();
+    const activeSegment = segments.find(
+      (segment) => segment.start === pointA && segment.end === pointB
+    );
+
+    if (!activeSegment) return;
+
+    await setSegmentPlaybackRate(activeSegment.id, direction);
+  }
+
+  function applyPlaybackRate(rate) {
+    const video = getVideo();
+    if (!video) return;
+    video.playbackRate = normalizePlaybackRate(rate);
   }
 
   function isTypingTarget(target) {
@@ -302,7 +436,10 @@
     const store = await getUiStore();
     isCollapsed = !!store.isCollapsed;
     isHelpOpen = !!store.isHelpOpen;
-    lang = store.lang === "ko" ? "ko" : "en";
+    lang =
+      store.lang === "ko" || store.lang === "en"
+        ? store.lang
+        : detectDefaultLang();
   }
 
   async function getCurrentVideoSegments() {
@@ -329,8 +466,15 @@
   function clearCurrentSelection() {
     transientStatus = "";
     transientStatusTone = "neutral";
-    pointA = null;
-    pointB = null;
+    const nextPlaybackRate =
+      activeSegmentId !== null
+        ? restorePlaybackRate ?? defaultPlaybackRate
+        : defaultPlaybackRate;
+    activeSegmentId = null;
+    initDefaultABPoints();
+    applyPlaybackRate(nextPlaybackRate);
+    defaultPlaybackRate = normalizePlaybackRate(nextPlaybackRate);
+    restorePlaybackRate = null;
     stopLoop();
   }
 
@@ -342,7 +486,8 @@
     video.currentTime = next;
   }
 
-  function toggleLoop() {
+  function toggleLoop(options = {}) {
+    const { showToastOnChange = false } = options;
     if (
       typeof pointA !== "number" ||
       typeof pointB !== "number" ||
@@ -364,24 +509,40 @@
       }
     }
 
+    if (showToastOnChange) {
+      showToast(
+        isLooping
+          ? t("toastLoopOn")(format(pointA), format(pointB))
+          : t("toastLoopOff"),
+        isLooping ? "success" : "neutral"
+      );
+    }
+
     updateUI();
   }
 
-  function setPointAToCurrent() {
+  function setPointAToCurrent(options = {}) {
+    const { showToastOnSet = false } = options;
     const video = getVideo();
     if (!video) return;
 
     transientStatus = "";
     transientStatusTone = "neutral";
+    activeSegmentId = null;
     pointA = video.currentTime;
     pointB = null;
     stopLoop();
 
     updateUI();
     renderSegments();
+
+    if (showToastOnSet) {
+      showToast(t("toastPointA")(format(pointA)), "success");
+    }
   }
 
-  function setPointBToCurrent() {
+  function setPointBToCurrent(options = {}) {
+    const { showToastOnSet = false } = options;
     const video = getVideo();
     if (!video) return;
     if (typeof pointA !== "number") {
@@ -391,6 +552,7 @@
 
     transientStatus = "";
     transientStatusTone = "neutral";
+    activeSegmentId = null;
     pointB = video.currentTime;
 
     if (pointB <= pointA) {
@@ -399,9 +561,14 @@
 
     updateUI();
     renderSegments();
+
+    if (showToastOnSet) {
+      showToast(t("toastPointB")(format(pointB)), "success");
+    }
   }
 
-  async function saveSegment() {
+  async function saveSegment(options = {}) {
+    const { showToastOnSave = false } = options;
     if (
       typeof pointA !== "number" ||
       typeof pointB !== "number" ||
@@ -412,21 +579,54 @@
     }
 
     const segments = await getCurrentVideoSegments();
+    const existingIndex = segments.findIndex(
+      (segment) => segment.start === pointA && segment.end === pointB
+    );
+
+    if (existingIndex !== -1) {
+      const existingSegment = segments[existingIndex];
+      showToast(
+        t("toastSegmentExists")(
+          existingIndex + 1,
+          existingSegment.title,
+          format(existingSegment.start),
+          format(existingSegment.end)
+        ),
+        "neutral"
+      );
+      return;
+    }
+
     const title = i18n[lang].segmentDefault(segments.length + 1);
+    const shortcut = segments.length < 9 ? String(segments.length + 1) : null;
 
     const segment = {
       id: crypto.randomUUID(),
       title,
       start: pointA,
       end: pointB,
+      playbackRate: normalizePlaybackRate(getVideo()?.playbackRate ?? 1),
     };
 
     segments.push(segment);
     await saveCurrentVideoSegments(segments);
+    activeSegmentId = segment.id;
 
     await renderSegments();
     updateUI();
     showTransientStatus(t("savedNotice"), "success");
+
+    if (showToastOnSave) {
+      showToast(
+        t("toastSegmentSaved")(
+          segment.title,
+          format(segment.start),
+          format(segment.end),
+          shortcut
+        ),
+        "success"
+      );
+    }
   }
 
   async function deleteSegment(id) {
@@ -488,8 +688,24 @@
   }
 
   function activateSegment(segment) {
+    const wasActive = isSegmentActive(segment);
+
+    if (wasActive) {
+      clearCurrentSelection();
+      renderSegments();
+      return;
+    }
+
+    const video = getVideo();
+    if (activeSegmentId === null && video) {
+      restorePlaybackRate = normalizePlaybackRate(video.playbackRate);
+      defaultPlaybackRate = restorePlaybackRate;
+    }
+
+    activeSegmentId = segment.id;
     pointA = segment.start;
     pointB = segment.end;
+    applyPlaybackRate(getSegmentPlaybackRate(segment));
     seekTo(segment.start);
     stopLoop();
     updateUI();
@@ -526,11 +742,7 @@
       const item = document.createElement("div");
       item.className = "ytal-item";
 
-      const isActive =
-        typeof pointA === "number" &&
-        typeof pointB === "number" &&
-        pointA === segment.start &&
-        pointB === segment.end;
+      const isActive = isSegmentActive(segment);
 
       if (isActive) {
         item.classList.add("active");
@@ -543,7 +755,14 @@
           <div class="ytal-item-title">${index + 1}. ${escapeHtml(segment.title)}</div>
           <button class="ytal-edit-btn" type="button" title="${t("editTitle")}" aria-label="${t("editTitle")}">✎</button>
         </div>
-        <div class="ytal-item-time">${format(segment.start)} - ${format(segment.end)}</div>
+        <div class="ytal-item-meta">
+          <div class="ytal-item-time">${format(segment.start)} - ${format(segment.end)}</div>
+          <div class="ytal-speed-chip" role="group" aria-label="${t("speedValue")(getSegmentPlaybackRate(segment))}">
+            <button class="ytal-speed-chip-btn" type="button" title="${t("speedDown")}" aria-label="${t("speedDown")}">-</button>
+            <span class="ytal-speed-chip-value">${getPlaybackRateLabel(getSegmentPlaybackRate(segment))}</span>
+            <button class="ytal-speed-chip-btn" type="button" title="${t("speedUp")}" aria-label="${t("speedUp")}">+</button>
+          </div>
+        </div>
       `;
       if (index < 9) {
         mainBtn.title = `${t("tipSegment")} ${index + 1}`;
@@ -556,6 +775,24 @@
           e.preventDefault();
           e.stopPropagation();
           await editSegmentTitle(segment.id);
+        });
+      }
+
+      const speedDownBtn = mainBtn.querySelector(".ytal-speed-chip-btn:first-child");
+      if (speedDownBtn) {
+        speedDownBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await setSegmentPlaybackRate(segment.id, -1);
+        });
+      }
+
+      const speedUpBtn = mainBtn.querySelector(".ytal-speed-chip-btn:last-child");
+      if (speedUpBtn) {
+        speedUpBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await setSegmentPlaybackRate(segment.id, 1);
         });
       }
 
@@ -575,10 +812,13 @@
       item.appendChild(actions);
       list.appendChild(item);
     });
+
+    schedulePlacementUpdate();
   }
 
   function updateUI() {
     if (!rootEl) return;
+    syncToastMountTarget();
 
     const loopBtn = document.getElementById("ytal-loop-btn");
     const saveBtn = document.getElementById("ytal-save-btn");
@@ -594,6 +834,8 @@
     const timelineTrack = document.getElementById("ytal-timeline-track");
     const rangeSummary = document.getElementById("ytal-range-summary");
     const resetBtn = document.getElementById("ytal-reset-selection");
+    const collapseBtn = document.getElementById("ytal-toggle-collapse");
+    const revealBtn = document.getElementById("ytal-reveal-panel");
     const video = getVideo();
     const duration = video?.duration || 0;
     const currentTime = video?.currentTime || 0;
@@ -612,6 +854,12 @@
       rangeSummary.textContent = canLoop
         ? t("rangeSummaryReady")(format(pointA), format(pointB))
         : t("rangeSummaryPending");
+    }
+
+    if (toastEl) {
+      toastEl.textContent = toastMessage;
+      toastEl.dataset.tone = toastTone;
+      toastEl.classList.toggle("show", !!toastMessage);
     }
 
     if (timelineFill) {
@@ -693,6 +941,7 @@
         <div class="ytal-help-row"><kbd>L</kbd> ${t("helpLoop")}</div>
         <div class="ytal-help-row"><kbd>S</kbd> ${t("helpSave")}</div>
         <div class="ytal-help-row"><kbd>1-9</kbd> ${t("helpLoad")}</div>
+        <div class="ytal-help-row"><kbd>+ / -</kbd> ${t("helpSpeed")}</div>
         <div class="ytal-help-row"><kbd>Del</kbd> ${t("helpDelete")}</div>
         <div class="ytal-help-row"><kbd>Esc</kbd> ${t("helpStop")}</div>
       `;
@@ -701,6 +950,27 @@
     if (langSelect) {
       langSelect.value = lang;
     }
+
+    if (collapseBtn) {
+      collapseBtn.innerHTML = "&#x2715;";
+      collapseBtn.title = t("tipCollapse");
+      collapseBtn.setAttribute("aria-label", t("tipCollapse"));
+    }
+
+    if (revealBtn) {
+      revealBtn.title = t("tipExpand");
+      revealBtn.setAttribute("aria-label", t("tipExpand"));
+      revealBtn.innerHTML = `
+        <span class="ytal-peek-btn-icon">&#x2922;</span>
+        <span class="ytal-peek-btn-text">${t("hiddenTab")}</span>
+      `;
+    }
+
+    syncInlineLauncher();
+    rootEl.classList.toggle(
+      "ytal-fullscreen-peek-visible",
+      rootMountEl !== document.body && isCollapsed && isFullscreenPeekVisible
+    );
   }
 
   function injectStyles() {
@@ -722,6 +992,144 @@
     );
   }
 
+  function getActionButtonsHost() {
+    const selectors = [
+      "ytd-watch-metadata #top-level-buttons-computed",
+      "ytd-watch-flexy #top-level-buttons-computed",
+      "#above-the-fold #top-level-buttons-computed",
+      "#actions-inner #top-level-buttons-computed",
+      "#menu #top-level-buttons-computed",
+    ];
+
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el) return el;
+    }
+
+    return null;
+  }
+
+  function getFullscreenHost() {
+    return (
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement ||
+      null
+    );
+  }
+
+  function getRootMountTarget() {
+    const fullscreenHost = getFullscreenHost();
+    if (fullscreenHost?.contains(getVideo()) || fullscreenHost?.id === "movie_player") {
+      return fullscreenHost;
+    }
+    return document.body;
+  }
+
+  function ensureToastElement() {
+    if (toastEl?.isConnected) return toastEl;
+
+    toastEl = document.createElement("div");
+    toastEl.id = "ytal-toast";
+    toastEl.className = "ytal-toast";
+    toastEl.setAttribute("aria-live", "polite");
+    toastEl.setAttribute("aria-atomic", "true");
+    return toastEl;
+  }
+
+  function ensureInlineLauncher() {
+    if (inlineLauncherEl) return inlineLauncherEl;
+
+    inlineLauncherEl = document.createElement("button");
+    inlineLauncherEl.type = "button";
+    inlineLauncherEl.id = "ytal-inline-launcher";
+    inlineLauncherEl.className = "ytal-inline-launcher";
+    inlineLauncherEl.addEventListener("click", animateExpandTransition);
+
+    return inlineLauncherEl;
+  }
+
+  function syncInlineLauncher() {
+    const shouldUseInlineLauncher =
+      !!rootEl &&
+      isCollapsed &&
+      rootMountEl === document.body &&
+      isWatchPage();
+    const host = shouldUseInlineLauncher ? getActionButtonsHost() : null;
+
+    if (!shouldUseInlineLauncher || !host) {
+      if (inlineLauncherEl?.isConnected) {
+        inlineLauncherEl.remove();
+      }
+      rootEl?.classList.remove("ytal-has-inline-launcher");
+      return;
+    }
+
+    const launcher = ensureInlineLauncher();
+    launcher.title = t("tipExpand");
+    launcher.setAttribute("aria-label", t("tipExpand"));
+    launcher.innerHTML = `
+      <span class="ytal-inline-launcher-label">${t("hiddenInline")}</span>
+      <span class="ytal-inline-launcher-icon" aria-hidden="true">&#x2922;</span>
+    `;
+
+    if (launcher.parentElement !== host || host.firstElementChild !== launcher) {
+      host.insertBefore(launcher, host.firstChild);
+    }
+
+    rootEl.classList.add("ytal-has-inline-launcher");
+  }
+
+  function clearFullscreenPeekTimer() {
+    if (fullscreenPeekTimer !== null) {
+      window.clearTimeout(fullscreenPeekTimer);
+      fullscreenPeekTimer = null;
+    }
+  }
+
+  function scheduleFullscreenPeekHide() {
+    clearFullscreenPeekTimer();
+    fullscreenPeekTimer = window.setTimeout(() => {
+      isFullscreenPeekVisible = false;
+      fullscreenPeekTimer = null;
+      updateUI();
+    }, FULLSCREEN_PEEK_HIDE_MS);
+  }
+
+  function showFullscreenPeekTemporarily() {
+    if (!rootEl || !isCollapsed || rootMountEl === document.body) return;
+    isFullscreenPeekVisible = true;
+    updateUI();
+    scheduleFullscreenPeekHide();
+  }
+
+  function syncToastMountTarget() {
+    const nextMountEl = getRootMountTarget();
+    const nextToastEl = ensureToastElement();
+
+    if (!nextMountEl || !nextToastEl) return;
+
+    if (nextToastEl.parentElement !== nextMountEl) {
+      nextMountEl.appendChild(nextToastEl);
+    }
+
+    nextToastEl.classList.toggle("ytal-in-fullscreen", nextMountEl !== document.body);
+  }
+
+  function syncRootMountTarget() {
+    if (!rootEl) return;
+
+    const nextMountEl = getRootMountTarget();
+    if (!nextMountEl || rootMountEl === nextMountEl) return;
+
+    nextMountEl.appendChild(rootEl);
+    rootMountEl = nextMountEl;
+    rootEl.classList.toggle("ytal-in-fullscreen", rootMountEl !== document.body);
+    syncToastMountTarget();
+    schedulePlacementUpdate();
+  }
+
   function ensureNativeTimelineOverlay() {
     const host = getNativeTimelineHost();
     if (!host) return null;
@@ -729,22 +1137,34 @@
     if (nativeRangeEl && nativeRangeEl.parentElement !== host) {
       nativeRangeEl.remove();
       nativeRangeEl = null;
+      nativeMarkerAEl = null;
+      nativeMarkerBEl = null;
     }
 
     if (!nativeRangeEl) {
       nativeRangeEl = document.createElement("div");
       nativeRangeEl.className = "ytal-native-range";
       host.appendChild(nativeRangeEl);
+
+      nativeMarkerAEl = document.createElement("div");
+      nativeMarkerAEl.className = "ytal-native-marker is-a";
+      nativeMarkerAEl.setAttribute("aria-hidden", "true");
+      host.appendChild(nativeMarkerAEl);
+
+      nativeMarkerBEl = document.createElement("div");
+      nativeMarkerBEl.className = "ytal-native-marker is-b";
+      nativeMarkerBEl.setAttribute("aria-hidden", "true");
+      host.appendChild(nativeMarkerBEl);
     }
 
     return nativeRangeEl;
   }
 
   function updateNativeTimelineOverlay(canLoop, duration) {
-    if (!canLoop || !duration) {
-      if (nativeRangeEl) {
-        nativeRangeEl.style.display = "none";
-      }
+    if (!duration) {
+      if (nativeRangeEl) nativeRangeEl.style.display = "none";
+      if (nativeMarkerAEl) nativeMarkerAEl.style.display = "none";
+      if (nativeMarkerBEl) nativeMarkerBEl.style.display = "none";
       return;
     }
 
@@ -753,6 +1173,25 @@
 
     const startRatio = getTimelineRatio(pointA, duration);
     const endRatio = getTimelineRatio(pointB, duration);
+
+    if (typeof pointA === "number" && nativeMarkerAEl) {
+      nativeMarkerAEl.style.display = "flex";
+      nativeMarkerAEl.style.left = `${startRatio * 100}%`;
+    } else if (nativeMarkerAEl) {
+      nativeMarkerAEl.style.display = "none";
+    }
+
+    if (typeof pointB === "number" && nativeMarkerBEl) {
+      nativeMarkerBEl.style.display = "flex";
+      nativeMarkerBEl.style.left = `${endRatio * 100}%`;
+    } else if (nativeMarkerBEl) {
+      nativeMarkerBEl.style.display = "none";
+    }
+
+    if (!canLoop) {
+      overlay.style.display = "none";
+      return;
+    }
 
     overlay.style.display = "block";
     overlay.style.left = `${startRatio * 100}%`;
@@ -768,8 +1207,169 @@
     });
   }
 
+  function getLauncherElement() {
+    if (rootMountEl !== document.body) {
+      return document.getElementById("ytal-reveal-panel");
+    }
+    if (inlineLauncherEl?.isConnected) {
+      return inlineLauncherEl;
+    }
+    return document.getElementById("ytal-reveal-panel");
+  }
+
+  function removeIdsFromClone(node) {
+    if (!node) return;
+    if (node.removeAttribute) {
+      node.removeAttribute("id");
+      node.removeAttribute("for");
+      node.removeAttribute("aria-controls");
+      node.removeAttribute("aria-labelledby");
+      node.removeAttribute("aria-describedby");
+    }
+    if (node.querySelectorAll) {
+      node.querySelectorAll("[id],[for],[aria-controls],[aria-labelledby],[aria-describedby]").forEach((el) => {
+        el.removeAttribute("id");
+        el.removeAttribute("for");
+        el.removeAttribute("aria-controls");
+        el.removeAttribute("aria-labelledby");
+        el.removeAttribute("aria-describedby");
+      });
+    }
+  }
+
+  function createTransitionGhost(sourceEl, rect) {
+    const ghost = sourceEl.cloneNode(true);
+    removeIdsFromClone(ghost);
+    ghost.classList.add("ytal-transition-ghost");
+    ghost.style.position = "fixed";
+    ghost.style.top = `${rect.top}px`;
+    ghost.style.left = `${rect.left}px`;
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    ghost.style.margin = "0";
+    ghost.style.pointerEvents = "none";
+    ghost.style.zIndex = "2147483647";
+    ghost.style.transformOrigin = "top left";
+    document.body.appendChild(ghost);
+    return ghost;
+  }
+
+  async function animateCollapseTransition() {
+    if (!rootEl || isCollapsed) return;
+
+    const startRect = rootEl.getBoundingClientRect();
+    const startRadius = window.getComputedStyle(rootEl).borderRadius;
+    const ghost = createTransitionGhost(rootEl, startRect);
+
+    isCollapsed = true;
+    isFullscreenPeekVisible = rootMountEl !== document.body;
+    rootEl.classList.toggle("ytal-collapsed", true);
+    updateRootPlacement();
+    updateUI();
+
+    const targetEl = getLauncherElement();
+    const endRect = targetEl?.getBoundingClientRect() || rootEl.getBoundingClientRect();
+    const endRadius = window.getComputedStyle(targetEl || rootEl).borderRadius;
+    const deltaX = endRect.left - startRect.left;
+    const deltaY = endRect.top - startRect.top;
+    const scaleX = Math.max(endRect.width / Math.max(startRect.width, 1), 0.08);
+    const scaleY = Math.max(endRect.height / Math.max(startRect.height, 1), 0.08);
+
+    if (typeof ghost.animate === "function") {
+      const animation = ghost.animate(
+        [
+          {
+            transform: "translate(0, 0) scale(1)",
+            opacity: 1,
+            borderRadius: startRadius,
+          },
+          {
+            transform: `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`,
+            opacity: 0.22,
+            borderRadius: endRadius,
+          },
+        ],
+        {
+          duration: PANEL_TRANSITION_MS,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          fill: "forwards",
+        }
+      );
+      await animation.finished.catch(() => {});
+    }
+
+    ghost.remove();
+    if (rootMountEl !== document.body) {
+      scheduleFullscreenPeekHide();
+    }
+    await saveUiState();
+  }
+
+  async function animateExpandTransition() {
+    if (!rootEl || !isCollapsed) return;
+
+    const launcherEl = getLauncherElement();
+    const startRect = launcherEl?.getBoundingClientRect();
+    const startRadius = window.getComputedStyle(launcherEl || rootEl).borderRadius;
+
+    isCollapsed = false;
+    isFullscreenPeekVisible = false;
+    clearFullscreenPeekTimer();
+    rootEl.classList.toggle("ytal-collapsed", false);
+    updateRootPlacement();
+    updateUI();
+
+    const endRect = rootEl.getBoundingClientRect();
+    const endRadius = window.getComputedStyle(rootEl).borderRadius;
+
+    if (startRect && typeof rootEl.animate === "function") {
+      const deltaX = startRect.left - endRect.left;
+      const deltaY = startRect.top - endRect.top;
+      const scaleX = Math.max(startRect.width / Math.max(endRect.width, 1), 0.08);
+      const scaleY = Math.max(startRect.height / Math.max(endRect.height, 1), 0.08);
+
+      const animation = rootEl.animate(
+        [
+          {
+            transform: `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`,
+            opacity: 0.28,
+            borderRadius: startRadius,
+          },
+          {
+            transform: "translate(0, 0) scale(1)",
+            opacity: 1,
+            borderRadius: endRadius,
+          },
+        ],
+        {
+          duration: PANEL_TRANSITION_MS,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          fill: "both",
+        }
+      );
+      await animation.finished.catch(() => {});
+    }
+
+    await saveUiState();
+  }
+
   function updateRootPlacement() {
     if (!rootEl) return;
+
+    syncRootMountTarget();
+    syncInlineLauncher();
+
+    if (rootMountEl && rootMountEl !== document.body) {
+      rootEl.classList.remove("ytal-docked");
+      rootEl.classList.add("ytal-in-fullscreen");
+      rootEl.style.top = isCollapsed ? "12px" : "16px";
+      rootEl.style.right = isCollapsed ? "12px" : "16px";
+      rootEl.style.left = "auto";
+      rootEl.style.bottom = "auto";
+      return;
+    }
+
+    rootEl.classList.remove("ytal-in-fullscreen");
 
     if (!isCollapsed) {
       rootEl.classList.remove("ytal-docked");
@@ -783,17 +1383,20 @@
     const playerEl = getPlayerContainer();
     if (!playerEl) {
       rootEl.classList.remove("ytal-docked");
-      rootEl.style.top = "80px";
-      rootEl.style.right = "20px";
+      rootEl.style.top = "96px";
+      rootEl.style.right = "12px";
       rootEl.style.left = "auto";
       rootEl.style.bottom = "auto";
       return;
     }
 
     const rect = playerEl.getBoundingClientRect();
-    const collapsedWidth = rootEl.offsetWidth || 140;
-    const top = Math.max(16, rect.bottom + 12);
-    const left = Math.max(16, rect.right - collapsedWidth);
+    const collapsedWidth = rootEl.offsetWidth || 132;
+    const top = Math.max(16, rect.top + 16);
+    const left = Math.max(
+      16,
+      Math.min(rect.right - collapsedWidth + 10, window.innerWidth - collapsedWidth - 12)
+    );
 
     rootEl.classList.add("ytal-docked");
     rootEl.style.top = `${top}px`;
@@ -808,6 +1411,15 @@
 
     window.addEventListener("resize", schedulePlacementUpdate);
     window.addEventListener("scroll", schedulePlacementUpdate, true);
+    document.addEventListener("mousemove", () => {
+      if (rootMountEl !== document.body && isCollapsed) {
+        showFullscreenPeekTemporarily();
+      }
+    }, true);
+    document.addEventListener("fullscreenchange", schedulePlacementUpdate);
+    document.addEventListener("webkitfullscreenchange", schedulePlacementUpdate);
+    document.addEventListener("mozfullscreenchange", schedulePlacementUpdate);
+    document.addEventListener("MSFullscreenChange", schedulePlacementUpdate);
   }
 
   function createRoot() {
@@ -824,6 +1436,10 @@
     }
 
     rootEl.innerHTML = `
+      <button class="ytal-peek-btn" id="ytal-reveal-panel" type="button" title="${t("tipExpand")}" aria-label="${t("tipExpand")}">
+        <span class="ytal-peek-btn-icon">&#x21bb;</span>
+        <span class="ytal-peek-btn-text">${t("hiddenTab")}</span>
+      </button>
       <div class="ytal-header">
         <div class="ytal-logo">
           <span class="ytal-logo-icon">&#x21bb;</span>
@@ -834,9 +1450,9 @@
             <option value="ko" ${lang === "ko" ? "selected" : ""}>한국어</option>
             <option value="en" ${lang === "en" ? "selected" : ""}>English</option>
           </select>
-            <button class="ytal-collapse-btn" id="ytal-toggle-collapse" title="${t("tipCollapse")}" aria-label="${t("tipCollapse")}">
-              ${isCollapsed ? "&#x25B2;" : "&#x25BC;"}
-            </button>
+          <button class="ytal-collapse-btn" id="ytal-toggle-collapse" title="${t("tipCollapse")}" aria-label="${t("tipCollapse")}">
+            &#x2715;
+          </button>
         </div>
       </div>
 
@@ -884,19 +1500,19 @@
       </div>
     `;
 
-    document.body.appendChild(rootEl);
+    rootMountEl = getRootMountTarget();
+    rootMountEl.appendChild(rootEl);
+    rootEl.classList.toggle("ytal-in-fullscreen", rootMountEl !== document.body);
+    syncToastMountTarget();
     schedulePlacementUpdate();
 
     document
       .getElementById("ytal-toggle-collapse")
-      .addEventListener("click", async () => {
-        isCollapsed = !isCollapsed;
-        rootEl.classList.toggle("ytal-collapsed", isCollapsed);
-        document.getElementById("ytal-toggle-collapse").innerHTML =
-          isCollapsed ? "&#x25B2;" : "&#x25BC;";
-        schedulePlacementUpdate();
-        await saveUiState();
-      });
+      .addEventListener("click", animateCollapseTransition);
+
+    document
+      .getElementById("ytal-reveal-panel")
+      .addEventListener("click", animateExpandTransition);
 
     document
       .getElementById("ytal-lang-select")
@@ -907,18 +1523,79 @@
         await renderSegments();
       });
 
-    document
-      .getElementById("ytal-timeline-track")
-      .addEventListener("click", (e) => {
-        const video = getVideo();
-        if (!video || !video.duration) return;
+    const trackEl = document.getElementById("ytal-timeline-track");
+    const markerAEl = document.getElementById("ytal-marker-a");
+    const markerBEl = document.getElementById("ytal-marker-b");
 
-        const rect = e.currentTarget.getBoundingClientRect();
-        const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
-        const nextTime = ratio * video.duration;
-        seekTo(nextTime);
-        setPointFromTimeline(nextTime);
-      });
+    function getTimeFromMouseEvent(e) {
+      const rect = trackEl.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
+      const video = getVideo();
+      return ratio * (video?.duration || 0);
+    }
+
+    function startDrag(mode, e) {
+      dragMode = mode;
+      document.body.style.userSelect = "none";
+      if (mode === "markerA") markerAEl.classList.add("dragging");
+      if (mode === "markerB") markerBEl.classList.add("dragging");
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    markerAEl.addEventListener("mousedown", (e) => startDrag("markerA", e));
+    markerBEl.addEventListener("mousedown", (e) => startDrag("markerB", e));
+
+    trackEl.addEventListener("mousedown", (e) => {
+      if (e.target === markerAEl) return;
+      if (e.target === markerBEl) return;
+      const video = getVideo();
+      if (!video || !video.duration) return;
+
+      const time = getTimeFromMouseEvent(e);
+      if (typeof pointA === "number" && typeof pointB === "number") {
+        const distA = Math.abs(time - pointA);
+        const distB = Math.abs(time - pointB);
+        startDrag(distA <= distB ? "markerA" : "markerB", e);
+      } else if (typeof pointA !== "number") {
+        pointA = time;
+        stopLoop();
+        updateUI();
+        startDrag("markerB", e);
+      } else {
+        startDrag("markerB", e);
+      }
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!dragMode) return;
+      const video = getVideo();
+      if (!video || !video.duration) return;
+
+      const time = getTimeFromMouseEvent(e);
+      if (dragMode === "markerA") {
+        activeSegmentId = null;
+        pointA = typeof pointB === "number"
+          ? Math.max(0, Math.min(time, pointB - MIN_GAP))
+          : Math.max(0, time);
+      } else if (dragMode === "markerB") {
+        activeSegmentId = null;
+        pointB = typeof pointA === "number"
+          ? Math.min(video.duration, Math.max(time, pointA + MIN_GAP))
+          : Math.min(video.duration, time);
+      }
+      stopLoop();
+      updateUI();
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (!dragMode) return;
+      markerAEl?.classList.remove("dragging");
+      markerBEl?.classList.remove("dragging");
+      dragMode = null;
+      document.body.style.userSelect = "";
+      renderSegments();
+    });
 
     document
       .getElementById("ytal-loop-btn")
@@ -926,7 +1603,7 @@
 
     document
       .getElementById("ytal-save-btn")
-      .addEventListener("click", saveSegment);
+      .addEventListener("click", () => saveSegment({ showToastOnSave: true }));
 
     document
       .getElementById("ytal-reset-selection")
@@ -941,6 +1618,7 @@
       .addEventListener("click", async () => {
         isHelpOpen = !isHelpOpen;
         updateUI();
+        schedulePlacementUpdate();
         await saveUiState();
       });
 
@@ -962,19 +1640,33 @@
         if (code === "KeyA") {
           e.preventDefault();
           e.stopPropagation();
-          setPointAToCurrent();
+          setPointAToCurrent({ showToastOnSet: true });
         } else if (code === "KeyB") {
           e.preventDefault();
           e.stopPropagation();
-          setPointBToCurrent();
+          setPointBToCurrent({ showToastOnSet: true });
         } else if (code === "KeyL") {
           e.preventDefault();
           e.stopPropagation();
-          toggleLoop();
+          toggleLoop({ showToastOnChange: true });
         } else if (code === "KeyS") {
           e.preventDefault();
           e.stopPropagation();
-          saveSegment();
+          saveSegment({ showToastOnSave: true });
+        } else if (
+          code === "Minus" ||
+          code === "NumpadSubtract"
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          await setActiveSegmentPlaybackRate(-1);
+        } else if (
+          code === "Equal" ||
+          code === "NumpadAdd"
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          await setActiveSegmentPlaybackRate(1);
         } else if (code === "Delete" || code === "Backspace") {
           e.preventDefault();
           e.stopPropagation();
@@ -994,12 +1686,35 @@
   }
 
   // ── Watcher ──
+  function initDefaultABPoints() {
+    pointA = 0;
+    const video = getVideo();
+    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+      pointB = video.duration;
+    } else if (video) {
+      const onDuration = () => {
+        if (Number.isFinite(video.duration) && video.duration > 0 && pointB === null) {
+          pointB = video.duration;
+          updateUI();
+        }
+        video.removeEventListener("durationchange", onDuration);
+        video.removeEventListener("loadedmetadata", onDuration);
+      };
+      video.addEventListener("durationchange", onDuration);
+      video.addEventListener("loadedmetadata", onDuration);
+    }
+  }
+
   function startWatcher() {
     stopWatcher();
 
     intervalId = window.setInterval(() => {
       const video = getVideo();
       if (!video) return;
+
+      if (activeSegmentId === null) {
+        defaultPlaybackRate = normalizePlaybackRate(video.playbackRate);
+      }
 
       if (
         isLooping &&
@@ -1025,19 +1740,43 @@
 
   function teardownRoot() {
     stopWatcher();
+    clearFullscreenPeekTimer();
+    activeSegmentId = null;
     pointA = null;
     pointB = null;
     isLooping = false;
+    defaultPlaybackRate = 1;
+    restorePlaybackRate = null;
+    isFullscreenPeekVisible = false;
 
     if (nativeRangeEl) {
       nativeRangeEl.remove();
       nativeRangeEl = null;
+    }
+    if (nativeMarkerAEl) {
+      nativeMarkerAEl.remove();
+      nativeMarkerAEl = null;
+    }
+    if (nativeMarkerBEl) {
+      nativeMarkerBEl.remove();
+      nativeMarkerBEl = null;
     }
 
     if (rootEl) {
       rootEl.remove();
       rootEl = null;
     }
+
+    if (toastEl) {
+      toastEl.remove();
+      toastEl = null;
+    }
+
+    if (inlineLauncherEl) {
+      inlineLauncherEl.remove();
+      inlineLauncherEl = null;
+    }
+
   }
 
   // ── Init ──
@@ -1049,6 +1788,7 @@
       return;
     }
 
+    initDefaultABPoints();
     await loadUiState();
     createRoot();
     await renderSegments();
@@ -1059,10 +1799,12 @@
   async function init() {
     await loadUiState();
     currentVideoId = getVideoId();
+    initDefaultABPoints();
     createRoot();
     await renderSegments();
     updateUI();
     startWatcher();
+    showToast(t("toastShortcutsIntro"));
   }
 
   function watchUrlChange() {
