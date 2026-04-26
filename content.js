@@ -13,7 +13,10 @@
   let pointA = null;
   let pointB = null;
   let activeSegmentId = null;
+  let activeSegmentTitle = "";
   let isLooping = false;
+  let isPlaylistLooping = false;
+  let isPlaylistAdvancing = false;
   let intervalId = null;
   let currentVideoId = null;
   let defaultPlaybackRate = 1;
@@ -50,13 +53,21 @@
       timelineStatusAwaitEnd: "B 마커를 드래그해서 끝점을 설정하세요",
       timelineStatusReady: "마커를 드래그해서 구간 조정",
       resetSelection: "선택 리셋",
+      resetSelectionDesc: "현재 A-B 구간 지우기",
       loop: "반복 하기",
-      looping: "반복 중...",
-      loopDesc: "선택 구간 바로 재생",
+      loopCurrent: "구간 반복",
+      loopSelected: (title) => `${title} 반복`,
+      loopingCurrent: "구간 반복중...",
+      loopingSelected: (title) => `${title} 반복중...`,
+      loopDesc: "지금 설정한 구간을 반복 재생",
+      loopCurrentDesc: "지금 설정한 구간만 반복",
+      loopSelectedDesc: (title) => `${title} 구간만 반복`,
       save: "목록에 저장",
       saveDesc: "나중에 다시 불러오기",
       rangeSummaryPending: "구간을 선택하면 여기에 시작과 끝 시간이 표시됩니다.",
       rangeSummaryReady: (start, end) => `${start} ~ ${end}`,
+      toastRangeUpdated: (start, end) => `구간 시간을 수정했어요. ${start} ~ ${end}`,
+      toastRangeInvalid: "시간 형식이 올바르지 않습니다. 12.5 또는 1:23.4처럼 입력해 주세요.",
       savedNotice: "저장됨. 바로 반복하거나 다른 구간을 선택할 수 있어요.",
       toastPointA: (time) => `루프 시작 구간을 찍었어요. A = ${time}`,
       toastPointB: (time) => `루프 끝 구간을 찍었어요. B = ${time}`,
@@ -68,7 +79,15 @@
         `이미 저장된 구간이에요. ${index}번 ${title} · ${start} ~ ${end}`,
       toastLoopOn: (start, end) => `AB 루프를 시작했어요. ${start} ~ ${end}`,
       toastLoopOff: "AB 루프를 멈췄어요.",
-      toastShortcutsIntro: "단축키: A (시작), B (끝), L (루프), S (저장), + / - (구간 배속)",
+      playlistLoop: "구간 전체 반복",
+      playlistLooping: "구간 전체 반복중...",
+      playlistLoopDesc: "저장한 구간을 처음부터 순서대로 반복",
+      playlistEmpty: "저장한 구간이 있어야 구간 전체 반복을 시작할 수 있어요.",
+      toastPlaylistLoopOn: "저장한 구간 전체 반복을 시작했어요.",
+      toastPlaylistLoopOff: "구간 전체 반복을 멈췄어요.",
+      toastPlaylistToLoopOn: (start, end) =>
+        `구간 전체 반복을 끝내고 현재 구간 반복으로 전환했어요. ${start} ~ ${end}`,
+      toastShortcutsIntro: "단축키: A (시작), B (끝), L (구간 반복), Shift + L (구간 전체 반복), S (저장), R (리셋), + / - (구간 배속)",
       savedSegments: "저장한 구간",
       shortcuts: "단축키",
       hideShortcuts: "단축키 숨기기",
@@ -89,7 +108,9 @@
       promptRename: "구간 이름 수정",
       helpSetA: "A 지점 설정",
       helpSetB: "B 지점 설정",
-      helpLoop: "루프 켜기/끄기",
+      helpLoop: "구간 반복 켜기/끄기",
+      helpPlaylistLoop: "구간 전체 반복 켜기/끄기",
+      helpReset: "선택 리셋",
       helpSave: "구간 저장",
       helpLoad: "저장된 구간 불러오기",
       helpSpeed: "활성 구간 배속 조절",
@@ -97,7 +118,7 @@
       helpStop: "루프 정지",
       tipLoop: "반복 하기 (L)",
       tipSave: "목록에 저장 (S)",
-      tipReset: "선택 리셋",
+      tipReset: "선택 리셋 (R)",
       tipPanelOpen: "저장 구간 패널 열기",
       tipPanelClose: "패널 숨기기",
       tipList: "저장 구간 보기",
@@ -114,13 +135,21 @@
       timelineStatusAwaitEnd: "Drag the B marker to set the end",
       timelineStatusReady: "Drag markers to adjust the range",
       resetSelection: "Reset selection",
+      resetSelectionDesc: "Clear the current A-B range",
       loop: "Play Loop",
-      looping: "Looping...",
-      loopDesc: "Start looping this range",
+      loopCurrent: "Loop Range",
+      loopSelected: (title) => `Loop ${title}`,
+      loopingCurrent: "Looping Range...",
+      loopingSelected: (title) => `Looping ${title}...`,
+      loopDesc: "Repeat the range you just set",
+      loopCurrentDesc: "Loop only the range you just set",
+      loopSelectedDesc: (title) => `Loop only ${title}`,
       save: "Save to List",
       saveDesc: "Recall it later",
       rangeSummaryPending: "Once you select a range, the start and end times will appear here.",
       rangeSummaryReady: (start, end) => `${start} ~ ${end}`,
+      toastRangeUpdated: (start, end) => `Segment time updated. ${start} ~ ${end}`,
+      toastRangeInvalid: "Invalid time format. Try 12.5 or 1:23.4.",
       savedNotice: "Saved. Press 'Play Loop' to start looping it.",
       toastPointA: (time) => `Loop start marked. A = ${time}`,
       toastPointB: (time) => `Loop end marked. B = ${time}`,
@@ -132,7 +161,15 @@
         `This range is already saved as ${index}. ${title} · ${start} ~ ${end}`,
       toastLoopOn: (start, end) => `AB loop started. ${start} ~ ${end}`,
       toastLoopOff: "AB loop stopped.",
-      toastShortcutsIntro: "Shortcuts: A (start), B (end), L (loop), S (save), + / - (segment speed)",
+      playlistLoop: "Loop All Segments",
+      playlistLooping: "Looping All Segments...",
+      playlistLoopDesc: "Loop saved segments from the beginning in order",
+      playlistEmpty: "Save at least one segment to start looping all segments.",
+      toastPlaylistLoopOn: "Looping all saved segments started.",
+      toastPlaylistLoopOff: "Looping all segments stopped.",
+      toastPlaylistToLoopOn: (start, end) =>
+        `Looping all segments ended and AB loop started for the current range. ${start} ~ ${end}`,
+      toastShortcutsIntro: "Shortcuts: A (start), B (end), L (loop range), Shift + L (loop all segments), S (save), R (reset), + / - (segment speed)",
       savedSegments: "Saved Segments",
       shortcuts: "Shortcuts",
       hideShortcuts: "Hide Shortcuts",
@@ -153,7 +190,9 @@
       promptRename: "Edit segment name",
       helpSetA: "Set A point",
       helpSetB: "Set B point",
-      helpLoop: "Toggle loop",
+      helpLoop: "Toggle range loop",
+      helpPlaylistLoop: "Toggle loop all segments",
+      helpReset: "Reset selection",
       helpSave: "Save segment",
       helpLoad: "Load segment",
       helpSpeed: "Adjust active segment speed",
@@ -161,7 +200,7 @@
       helpStop: "Stop loop",
       tipLoop: "Play Loop (L)",
       tipSave: "Save to List (S)",
-      tipReset: "Reset selection",
+      tipReset: "Reset selection (R)",
       tipPanelOpen: "Open saved segments panel",
       tipPanelClose: "Hide panel",
       tipList: "Show saved segments",
@@ -192,6 +231,34 @@
       <span class="ytal-btn-label">${label}</span>
       <span class="ytal-btn-desc">${description}</span>
     `;
+  }
+
+  function resetButtonMarkup(label) {
+    return `
+      <span class="ytal-reset-btn-icon" aria-hidden="true">&#x21ba;</span>
+      <span class="ytal-reset-btn-text">${label}</span>
+    `;
+  }
+
+  function getActiveSegmentDisplayTitle() {
+    return activeSegmentTitle || t("savedSegments");
+  }
+
+  function getLoopButtonLabel(canLoop) {
+    if (!canLoop) return t("loop");
+    if (activeSegmentId !== null) {
+      const title = getActiveSegmentDisplayTitle();
+      return isLooping ? t("loopingSelected")(title) : t("loopSelected")(title);
+    }
+    return isLooping ? t("loopingCurrent") : t("loopCurrent");
+  }
+
+  function getLoopButtonDescription(canLoop) {
+    if (!canLoop) return t("loopDesc");
+    if (activeSegmentId !== null) {
+      return t("loopSelectedDesc")(getActiveSegmentDisplayTitle());
+    }
+    return t("loopCurrentDesc");
   }
 
   function syncButtonMarkup(button, label, description) {
@@ -292,6 +359,35 @@
   function formatPrecise(seconds) {
     if (typeof seconds !== "number" || Number.isNaN(seconds)) return "-";
     return `${seconds.toFixed(1)}s`;
+  }
+
+  function formatEditableTime(seconds) {
+    if (typeof seconds !== "number" || Number.isNaN(seconds)) return "";
+    return seconds.toFixed(1).replace(/\.0$/, "");
+  }
+
+  function parseTimeInput(value) {
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed) return null;
+
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+      const seconds = Number(trimmed);
+      return Number.isFinite(seconds) ? seconds : null;
+    }
+
+    const parts = trimmed.split(":");
+    if (parts.length < 2 || parts.length > 3) return null;
+
+    const numbers = parts.map((part) => Number(part.trim()));
+    if (numbers.some((part) => !Number.isFinite(part) || part < 0)) {
+      return null;
+    }
+
+    if (parts.length === 2) {
+      return numbers[0] * 60 + numbers[1];
+    }
+
+    return numbers[0] * 3600 + numbers[1] * 60 + numbers[2];
   }
 
   function normalizePlaybackRate(value) {
@@ -463,19 +559,86 @@
     updateUI();
   }
 
+  function stopPlaylistLoop(options = {}) {
+    const { showToastOnChange = false } = options;
+    if (!isPlaylistLooping) return;
+    isPlaylistLooping = false;
+    isPlaylistAdvancing = false;
+    if (showToastOnChange) {
+      showToast(t("toastPlaylistLoopOff"), "neutral");
+    }
+    updateUI();
+    renderSegments();
+  }
+
   function clearCurrentSelection() {
     transientStatus = "";
     transientStatusTone = "neutral";
+    stopPlaylistLoop();
     const nextPlaybackRate =
       activeSegmentId !== null
         ? restorePlaybackRate ?? defaultPlaybackRate
         : defaultPlaybackRate;
     activeSegmentId = null;
+    activeSegmentTitle = "";
     initDefaultABPoints();
     applyPlaybackRate(nextPlaybackRate);
     defaultPlaybackRate = normalizePlaybackRate(nextPlaybackRate);
     restorePlaybackRate = null;
     stopLoop();
+  }
+
+  async function updateSegmentRange(id, startRawValue, endRawValue) {
+    const nextStart = parseTimeInput(startRawValue);
+    const nextEnd = parseTimeInput(endRawValue);
+
+    if (nextStart === null || nextEnd === null) {
+      showToast(t("toastRangeInvalid"), "neutral");
+      return;
+    }
+
+    const segments = await getCurrentVideoSegments();
+    const index = segments.findIndex((segment) => segment.id === id);
+    if (index === -1) return;
+
+    const video = getVideo();
+    const duration =
+      Number.isFinite(video?.duration) && video.duration > 0
+        ? video.duration
+        : Number.POSITIVE_INFINITY;
+
+    const clampedStart = Math.max(0, Math.min(nextStart, duration));
+    const clampedEnd = Math.min(duration, Math.max(nextEnd, clampedStart + MIN_GAP));
+    const didChange =
+      clampedStart !== segments[index].start ||
+      clampedEnd !== segments[index].end;
+    if (!didChange) {
+      return;
+    }
+
+    segments[index] = {
+      ...segments[index],
+      start: clampedStart,
+      end: clampedEnd,
+    };
+    await saveCurrentVideoSegments(segments);
+
+    if (activeSegmentId === id) {
+      transientStatus = "";
+      transientStatusTone = "neutral";
+      pointA = clampedStart;
+      pointB = clampedEnd;
+      stopLoop();
+    }
+
+    updateUI();
+    await renderSegments();
+
+    showToast(
+      t("toastRangeUpdated")(format(clampedStart), format(clampedEnd)),
+      "success",
+      1600
+    );
   }
 
   function seekTo(time) {
@@ -497,6 +660,11 @@
       return;
     }
 
+    const wasPlaylistLooping = isPlaylistLooping;
+    if (wasPlaylistLooping) {
+      stopPlaylistLoop();
+    }
+
     isLooping = !isLooping;
 
     if (isLooping) {
@@ -512,7 +680,9 @@
     if (showToastOnChange) {
       showToast(
         isLooping
-          ? t("toastLoopOn")(format(pointA), format(pointB))
+          ? wasPlaylistLooping
+            ? t("toastPlaylistToLoopOn")(format(pointA), format(pointB))
+            : t("toastLoopOn")(format(pointA), format(pointB))
           : t("toastLoopOff"),
         isLooping ? "success" : "neutral"
       );
@@ -528,7 +698,9 @@
 
     transientStatus = "";
     transientStatusTone = "neutral";
+    stopPlaylistLoop();
     activeSegmentId = null;
+    activeSegmentTitle = "";
     pointA = video.currentTime;
     pointB = null;
     stopLoop();
@@ -552,7 +724,9 @@
 
     transientStatus = "";
     transientStatusTone = "neutral";
+    stopPlaylistLoop();
     activeSegmentId = null;
+    activeSegmentTitle = "";
     pointB = video.currentTime;
 
     if (pointB <= pointA) {
@@ -611,6 +785,7 @@
     segments.push(segment);
     await saveCurrentVideoSegments(segments);
     activeSegmentId = segment.id;
+    activeSegmentTitle = segment.title;
 
     await renderSegments();
     updateUI();
@@ -630,9 +805,17 @@
   }
 
   async function deleteSegment(id) {
+    const wasActivePlaylistSegment = isPlaylistLooping && activeSegmentId === id;
     const segments = await getCurrentVideoSegments();
     const next = segments.filter((segment) => segment.id !== id);
     await saveCurrentVideoSegments(next);
+    if (wasActivePlaylistSegment || next.length === 0) {
+      stopPlaylistLoop();
+    }
+    if (activeSegmentId === id) {
+      activeSegmentId = null;
+      activeSegmentTitle = "";
+    }
     await renderSegments();
     updateUI();
   }
@@ -661,12 +844,7 @@
     await deleteSegment(activeSegment.id);
   }
 
-  async function editSegmentTitle(id) {
-    const segments = await getCurrentVideoSegments();
-    const index = segments.findIndex((segment) => segment.id === id);
-    if (index === -1) return;
-
-    const currentTitle = segments[index].title || "";
+  async function editSegmentTitle(id, currentTitle = "") {
     const nextTitle = prompt(t("promptRename"), currentTitle);
 
     if (nextTitle === null) return;
@@ -677,25 +855,29 @@
       return;
     }
 
+    const segments = await getCurrentVideoSegments();
+    const index = segments.findIndex((segment) => segment.id === id);
+    if (index === -1) return;
+
     segments[index] = {
       ...segments[index],
       title: trimmed,
     };
 
     await saveCurrentVideoSegments(segments);
+    if (activeSegmentId === id) {
+      activeSegmentTitle = trimmed;
+    }
     await renderSegments();
     updateUI();
   }
 
-  function activateSegment(segment) {
-    const wasActive = isSegmentActive(segment);
-
-    if (wasActive) {
-      clearCurrentSelection();
-      renderSegments();
-      return;
+  function activateSegment(segment, options = {}) {
+    const { fromPlaylist = false } = options;
+    if (!fromPlaylist) {
+      stopPlaylistLoop();
+      stopLoop();
     }
-
     const video = getVideo();
     if (activeSegmentId === null && video) {
       restorePlaybackRate = normalizePlaybackRate(video.playbackRate);
@@ -703,11 +885,14 @@
     }
 
     activeSegmentId = segment.id;
+    activeSegmentTitle = segment.title;
     pointA = segment.start;
     pointB = segment.end;
     applyPlaybackRate(getSegmentPlaybackRate(segment));
     seekTo(segment.start);
-    stopLoop();
+    if (fromPlaylist && video) {
+      video.play().catch(() => {});
+    }
     updateUI();
     renderSegments();
   }
@@ -719,14 +904,60 @@
     activateSegment(segment);
   }
 
+  async function startPlaylistLoop() {
+    const segments = await getCurrentVideoSegments();
+    if (segments.length === 0) {
+      showToast(t("playlistEmpty"), "neutral");
+      return;
+    }
+
+    stopLoop();
+    isPlaylistLooping = true;
+    activateSegment(segments[0], { fromPlaylist: true });
+    showToast(t("toastPlaylistLoopOn"), "success");
+    updateUI();
+  }
+
+  async function togglePlaylistLoop() {
+    if (isPlaylistLooping) {
+      stopPlaylistLoop({ showToastOnChange: true });
+      return;
+    }
+    await startPlaylistLoop();
+  }
+
+  async function advancePlaylistLoop() {
+    if (isPlaylistAdvancing) return;
+    isPlaylistAdvancing = true;
+
+    try {
+      const segments = await getCurrentVideoSegments();
+      if (segments.length === 0) {
+        stopPlaylistLoop();
+        return;
+      }
+
+      const currentIndex = segments.findIndex((segment) => segment.id === activeSegmentId);
+      const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % segments.length : 0;
+      activateSegment(segments[nextIndex], { fromPlaylist: true });
+    } finally {
+      isPlaylistAdvancing = false;
+    }
+  }
+
   // ── Render ──
   async function renderSegments() {
     const list = document.getElementById("ytal-segment-list");
+    const toolbar = document.getElementById("ytal-segment-toolbar");
     if (!list) return;
 
     const segments = await getCurrentVideoSegments();
 
     if (segments.length === 0) {
+      if (toolbar) {
+        toolbar.innerHTML = "";
+        toolbar.hidden = true;
+      }
       list.innerHTML = `
         <div class="ytal-empty">
           <div class="ytal-empty-title">${t("noSegments")}</div>
@@ -734,6 +965,21 @@
         </div>
       `;
       return;
+    }
+
+    if (toolbar) {
+      toolbar.hidden = false;
+      toolbar.innerHTML = `
+        <button class="ytal-section-chip${isPlaylistLooping ? " active" : ""}" id="ytal-playlist-loop-btn" type="button" title="${escapeHtml(t("playlistLoopDesc"))}">
+          ${escapeHtml(isPlaylistLooping ? t("playlistLooping") : t("playlistLoop"))}
+        </button>
+      `;
+
+      toolbar
+        .querySelector("#ytal-playlist-loop-btn")
+        ?.addEventListener("click", () => {
+          togglePlaylistLoop();
+        });
     }
 
     list.innerHTML = "";
@@ -748,15 +994,23 @@
         item.classList.add("active");
       }
 
-      const mainBtn = document.createElement("button");
+      const mainBtn = document.createElement("div");
       mainBtn.className = "ytal-item-main";
+      mainBtn.setAttribute("role", "button");
+      mainBtn.tabIndex = 0;
       mainBtn.innerHTML = `
         <div class="ytal-item-title-row">
-          <div class="ytal-item-title">${index + 1}. ${escapeHtml(segment.title)}</div>
-          <button class="ytal-edit-btn" type="button" title="${t("editTitle")}" aria-label="${t("editTitle")}">✎</button>
+          <div class="ytal-item-title-group">
+            <div class="ytal-item-title">${index + 1}. ${escapeHtml(segment.title)}</div>
+            <button class="ytal-edit-btn" type="button" title="${t("editTitle")}" aria-label="${t("editTitle")}">✎</button>
+          </div>
         </div>
         <div class="ytal-item-meta">
-          <div class="ytal-item-time">${format(segment.start)} - ${format(segment.end)}</div>
+          <div class="ytal-item-time-editor">
+            <input class="ytal-item-time-input" type="text" inputmode="decimal" aria-label="Segment start time" value="${escapeHtml(formatEditableTime(segment.start))}">
+            <span class="ytal-item-time-separator">-</span>
+            <input class="ytal-item-time-input" type="text" inputmode="decimal" aria-label="Segment end time" value="${escapeHtml(formatEditableTime(segment.end))}">
+          </div>
           <div class="ytal-speed-chip" role="group" aria-label="${t("speedValue")(getSegmentPlaybackRate(segment))}">
             <button class="ytal-speed-chip-btn" type="button" title="${t("speedDown")}" aria-label="${t("speedDown")}">-</button>
             <span class="ytal-speed-chip-value">${getPlaybackRateLabel(getSegmentPlaybackRate(segment))}</span>
@@ -768,13 +1022,19 @@
         mainBtn.title = `${t("tipSegment")} ${index + 1}`;
       }
       mainBtn.addEventListener("click", () => activateSegment(segment));
+      mainBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          activateSegment(segment);
+        }
+      });
 
       const editBtn = mainBtn.querySelector(".ytal-edit-btn");
       if (editBtn) {
         editBtn.addEventListener("click", async (e) => {
           e.preventDefault();
           e.stopPropagation();
-          await editSegmentTitle(segment.id);
+          await editSegmentTitle(segment.id, segment.title);
         });
       }
 
@@ -795,6 +1055,41 @@
           await setSegmentPlaybackRate(segment.id, 1);
         });
       }
+
+      const timeInputs = mainBtn.querySelectorAll(".ytal-item-time-input");
+      const [startInput, endInput] = timeInputs;
+
+      const commitTimeChange = async () => {
+        if (!startInput || !endInput) return;
+        await updateSegmentRange(segment.id, startInput.value, endInput.value);
+      };
+
+      timeInputs.forEach((input) => {
+        input.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+        input.addEventListener("focus", (e) => {
+          e.stopPropagation();
+        });
+        input.addEventListener("keydown", async (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            await commitTimeChange();
+            input.blur();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            input.value = input === startInput
+              ? formatEditableTime(segment.start)
+              : formatEditableTime(segment.end);
+            input.blur();
+          }
+        });
+        input.addEventListener("blur", async () => {
+          await commitTimeChange();
+        });
+      });
 
       const actions = document.createElement("div");
       actions.className = "ytal-item-actions";
@@ -849,6 +1144,8 @@
       typeof pointA === "number" &&
       typeof pointB === "number" &&
       pointB > pointA;
+    const hasSelection =
+      typeof pointA === "number" || typeof pointB === "number";
 
     if (rangeSummary) {
       rangeSummary.textContent = canLoop
@@ -903,19 +1200,25 @@
     }
 
     if (resetBtn) {
+      const resetLabel = t("resetSelection");
+      if (resetBtn.dataset.label !== resetLabel) {
+        resetBtn.dataset.label = resetLabel;
+        resetBtn.innerHTML = resetButtonMarkup(resetLabel);
+      }
       resetBtn.title = t("tipReset");
       resetBtn.setAttribute("aria-label", t("resetSelection"));
-      resetBtn.disabled = typeof pointA !== "number" && typeof pointB !== "number";
+      resetBtn.disabled = !hasSelection;
+      resetBtn.classList.toggle("active", hasSelection);
     }
 
     if (loopBtn) {
       syncButtonMarkup(
         loopBtn,
-        isLooping ? t("looping") : t("loop"),
-        t("loopDesc")
+        getLoopButtonLabel(canLoop),
+        getLoopButtonDescription(canLoop)
       );
       loopBtn.disabled = !canLoop;
-      loopBtn.classList.toggle("active", isLooping);
+      loopBtn.classList.toggle("active", isLooping && !isPlaylistLooping);
     }
 
     if (saveBtn) {
@@ -939,7 +1242,9 @@
         <div class="ytal-help-row"><kbd>A</kbd> ${t("helpSetA")}</div>
         <div class="ytal-help-row"><kbd>B</kbd> ${t("helpSetB")}</div>
         <div class="ytal-help-row"><kbd>L</kbd> ${t("helpLoop")}</div>
+        <div class="ytal-help-row"><kbd>Shift + L</kbd> ${t("helpPlaylistLoop")}</div>
         <div class="ytal-help-row"><kbd>S</kbd> ${t("helpSave")}</div>
+        <div class="ytal-help-row"><kbd>R</kbd> ${t("helpReset")}</div>
         <div class="ytal-help-row"><kbd>1-9</kbd> ${t("helpLoad")}</div>
         <div class="ytal-help-row"><kbd>+ / -</kbd> ${t("helpSpeed")}</div>
         <div class="ytal-help-row"><kbd>Del</kbd> ${t("helpDelete")}</div>
@@ -1459,7 +1764,7 @@
       <div class="ytal-body">
         <div class="ytal-timeline-card">
           <div class="ytal-timeline-topbar">
-            <button class="ytal-reset-btn" id="ytal-reset-selection" type="button" title="${t("tipReset")}" aria-label="${t("resetSelection")}">&#x21ba;</button>
+            <button class="ytal-reset-btn" id="ytal-reset-selection" type="button" title="${t("tipReset")}" aria-label="${t("resetSelection")}">${resetButtonMarkup(t("resetSelection"))}</button>
           </div>
           <button class="ytal-timeline-track" id="ytal-timeline-track" type="button" aria-label="${t("timelineHint")}" role="slider">
             <span class="ytal-timeline-fill" id="ytal-timeline-fill"></span>
@@ -1479,7 +1784,10 @@
           <button class="ytal-btn ytal-btn-save" id="ytal-save-btn" title="${t("tipSave")}">${t("save")}</button>
         </div>
 
-        <div class="ytal-section-label">${t("savedSegments")}</div>
+        <div class="ytal-section-row">
+          <div class="ytal-section-label">${t("savedSegments")}</div>
+          <div class="ytal-segment-toolbar" id="ytal-segment-toolbar" hidden></div>
+        </div>
         <div id="ytal-segment-list" class="ytal-list"></div>
 
         <button class="ytal-help-toggle" id="ytal-help-toggle" title="${t("tipShortcuts")}">
@@ -1490,8 +1798,11 @@
           <div class="ytal-help-row"><kbd>A</kbd> ${t("helpSetA")}</div>
           <div class="ytal-help-row"><kbd>B</kbd> ${t("helpSetB")}</div>
           <div class="ytal-help-row"><kbd>L</kbd> ${t("helpLoop")}</div>
+          <div class="ytal-help-row"><kbd>Shift + L</kbd> ${t("helpPlaylistLoop")}</div>
           <div class="ytal-help-row"><kbd>S</kbd> ${t("helpSave")}</div>
+          <div class="ytal-help-row"><kbd>R</kbd> ${t("helpReset")}</div>
           <div class="ytal-help-row"><kbd>1-9</kbd> ${t("helpLoad")}</div>
+          <div class="ytal-help-row"><kbd>+ / -</kbd> ${t("helpSpeed")}</div>
           <div class="ytal-help-row"><kbd>Del</kbd> ${t("helpDelete")}</div>
           <div class="ytal-help-row"><kbd>Esc</kbd> ${t("helpStop")}</div>
         </div>
@@ -1558,6 +1869,7 @@
         const distB = Math.abs(time - pointB);
         startDrag(distA <= distB ? "markerA" : "markerB", e);
       } else if (typeof pointA !== "number") {
+        stopPlaylistLoop();
         pointA = time;
         stopLoop();
         updateUI();
@@ -1574,11 +1886,13 @@
 
       const time = getTimeFromMouseEvent(e);
       if (dragMode === "markerA") {
+        stopPlaylistLoop();
         activeSegmentId = null;
         pointA = typeof pointB === "number"
           ? Math.max(0, Math.min(time, pointB - MIN_GAP))
           : Math.max(0, time);
       } else if (dragMode === "markerB") {
+        stopPlaylistLoop();
         activeSegmentId = null;
         pointB = typeof pointA === "number"
           ? Math.min(video.duration, Math.max(time, pointA + MIN_GAP))
@@ -1645,6 +1959,10 @@
           e.preventDefault();
           e.stopPropagation();
           setPointBToCurrent({ showToastOnSet: true });
+        } else if (code === "KeyL" && e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          await togglePlaylistLoop();
         } else if (code === "KeyL") {
           e.preventDefault();
           e.stopPropagation();
@@ -1653,6 +1971,12 @@
           e.preventDefault();
           e.stopPropagation();
           saveSegment({ showToastOnSave: true });
+        } else if (code === "KeyR") {
+          e.preventDefault();
+          e.stopPropagation();
+          clearCurrentSelection();
+          updateUI();
+          renderSegments();
         } else if (
           code === "Minus" ||
           code === "NumpadSubtract"
@@ -1675,6 +1999,7 @@
           e.preventDefault();
           e.stopPropagation();
           stopLoop();
+          stopPlaylistLoop({ showToastOnChange: true });
         } else if (/^Digit[1-9]$/.test(code)) {
           e.preventDefault();
           e.stopPropagation();
@@ -1717,6 +2042,17 @@
       }
 
       if (
+        isPlaylistLooping &&
+        typeof pointA === "number" &&
+        typeof pointB === "number" &&
+        pointB > pointA &&
+        video.currentTime >= pointB
+      ) {
+        advancePlaylistLoop();
+        return;
+      }
+
+      if (
         isLooping &&
         typeof pointA === "number" &&
         typeof pointB === "number" &&
@@ -1742,9 +2078,12 @@
     stopWatcher();
     clearFullscreenPeekTimer();
     activeSegmentId = null;
+    activeSegmentTitle = "";
     pointA = null;
     pointB = null;
     isLooping = false;
+    isPlaylistLooping = false;
+    isPlaylistAdvancing = false;
     defaultPlaybackRate = 1;
     restorePlaybackRate = null;
     isFullscreenPeekVisible = false;
