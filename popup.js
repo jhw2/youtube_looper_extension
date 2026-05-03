@@ -1,5 +1,13 @@
 const STORAGE_UI_KEY = "yt-ab-looper-ui";
 
+function trackAnalyticsEvent(eventName, params = {}) {
+  chrome.runtime.sendMessage({
+    type: "trackAnalyticsEvent",
+    eventName,
+    params,
+  });
+}
+
 const texts = {
   ko: {
     title: "유튜브 구간 저장과 반복을 바로 시작하세요",
@@ -76,9 +84,14 @@ chrome.storage.local.get([STORAGE_UI_KEY], (result) => {
   document.getElementById("open-web").textContent = texts[lang].openWeb;
   document.getElementById("popup-shortcut-label").textContent = texts[lang].shortcutLabel;
   document.getElementById("popup-shortcuts").textContent = texts[lang].shortcuts;
+
+  trackAnalyticsEvent("popup_opened", {
+    ui_language: lang,
+  });
 });
 
 document.getElementById("open-youtube").addEventListener("click", () => {
+  trackAnalyticsEvent("popup_open_youtube_clicked");
   chrome.tabs.create({ url: "https://www.youtube.com/" });
 });
 
@@ -92,6 +105,9 @@ document.getElementById("open-web").addEventListener("click", (e) => {
       webUrl += "?url=" + encodeURIComponent(tab.url);
     }
 
+    trackAnalyticsEvent("popup_open_web_clicked", {
+      has_watch_url_context: Boolean(tab && tab.url && tab.url.includes("youtube.com/watch")),
+    });
     chrome.tabs.create({ url: webUrl });
   });
 });

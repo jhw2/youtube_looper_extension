@@ -17,6 +17,7 @@
   let isLooping = false;
   let isPlaylistLooping = false;
   let isPlaylistAdvancing = false;
+  let draggedSegmentId = null;
   let intervalId = null;
   let currentVideoId = null;
   let defaultPlaybackRate = 1;
@@ -44,6 +45,7 @@
   let dragMode = null; // 'markerA' | 'markerB'
   let rootMountEl = null;
   let isFullscreenPeekVisible = false;
+  let hasTrackedPageView = false;
 
   // ── i18n ──
   const i18n = {
@@ -73,7 +75,7 @@
       toastPointB: (time) => `루프 끝 구간을 찍었어요. B = ${time}`,
       toastSegmentSaved: (title, start, end, shortcut) =>
         shortcut
-          ? `${title} 구간을 저장했어요. ${start} ~ ${end} · 불러오기는 ${shortcut} · 배속은 + / -`
+          ? `${title} 구간을 저장했어요. ${start} ~ ${end} · 불러오기는 ${shortcut}번 · 순서를 바꾸면 숫자 단축키도 함께 바뀌어요 · 배속은 + / -`
           : `${title} 구간을 저장했어요. ${start} ~ ${end} · 배속은 + / -`,
       toastSegmentExists: (index, title, start, end) =>
         `이미 저장된 구간이에요. ${index}번 ${title} · ${start} ~ ${end}`,
@@ -87,7 +89,7 @@
       toastPlaylistLoopOff: "구간 전체 반복을 멈췄어요.",
       toastPlaylistToLoopOn: (start, end) =>
         `구간 전체 반복을 끝내고 현재 구간 반복으로 전환했어요. ${start} ~ ${end}`,
-      toastShortcutsIntro: "단축키: A (시작), B (끝), L (구간 반복), Shift + L (구간 전체 반복), S (저장), R (리셋), + / - (구간 배속)",
+      toastShortcutsIntro: "단축키: A (시작), B (끝), L (구간 반복), Shift + L (구간 전체 반복), S (저장), 1-9 (현재 목록 순서대로 불러오기), R (리셋), + / - (구간 배속)",
       savedSegments: "저장한 구간",
       shortcuts: "단축키",
       hideShortcuts: "단축키 숨기기",
@@ -97,8 +99,10 @@
       editTitle: "이름 수정",
       speedDown: "배속 낮추기",
       speedUp: "배속 높이기",
+      reorder: "순서 바꾸기",
       speedValue: (value) => `${value}x`,
       segmentDefault: (n) => `구간${n}`,
+      toastSegmentsReordered: "저장한 구간 순서를 바꿨어요.",
       alertSetAB: "A와 B를 먼저 올바르게 설정해 주세요.",
       alertSetA: "먼저 A 지점을 설정해 주세요.",
       alertNoSegment: "저장할 수 있는 A-B 구간이 없습니다.",
@@ -112,7 +116,7 @@
       helpPlaylistLoop: "구간 전체 반복 켜기/끄기",
       helpReset: "선택 리셋",
       helpSave: "구간 저장",
-      helpLoad: "저장된 구간 불러오기",
+      helpLoad: "저장된 구간 불러오기 (현재 목록 순서)",
       helpSpeed: "활성 구간 배속 조절",
       helpDelete: "활성 구간 삭제",
       helpStop: "루프 정지",
@@ -155,7 +159,7 @@
       toastPointB: (time) => `Loop end marked. B = ${time}`,
       toastSegmentSaved: (title, start, end, shortcut) =>
         shortcut
-          ? `Saved ${title}. ${start} ~ ${end}. Load: ${shortcut}. Speed: + / -`
+          ? `Saved ${title}. ${start} ~ ${end}. Load: ${shortcut}. Number shortcuts follow the current list order. Speed: + / -`
           : `Saved ${title}. ${start} ~ ${end}. Speed: + / -`,
       toastSegmentExists: (index, title, start, end) =>
         `This range is already saved as ${index}. ${title} · ${start} ~ ${end}`,
@@ -169,7 +173,7 @@
       toastPlaylistLoopOff: "Looping all segments stopped.",
       toastPlaylistToLoopOn: (start, end) =>
         `Looping all segments ended and AB loop started for the current range. ${start} ~ ${end}`,
-      toastShortcutsIntro: "Shortcuts: A (start), B (end), L (loop range), Shift + L (loop all segments), S (save), R (reset), + / - (segment speed)",
+      toastShortcutsIntro: "Shortcuts: A (start), B (end), L (loop range), Shift + L (loop all segments), S (save), 1-9 (load by current list order), R (reset), + / - (segment speed)",
       savedSegments: "Saved Segments",
       shortcuts: "Shortcuts",
       hideShortcuts: "Hide Shortcuts",
@@ -179,8 +183,10 @@
       editTitle: "Edit name",
       speedDown: "Decrease speed",
       speedUp: "Increase speed",
+      reorder: "Reorder",
       speedValue: (value) => `${value}x`,
       segmentDefault: (n) => `Segment ${n}`,
+      toastSegmentsReordered: "Saved segments reordered.",
       alertSetAB: "Please set A and B points first.",
       alertSetA: "Please set point A first.",
       alertNoSegment: "No A-B segment to save.",
@@ -194,7 +200,7 @@
       helpPlaylistLoop: "Toggle loop all segments",
       helpReset: "Reset selection",
       helpSave: "Save segment",
-      helpLoad: "Load segment",
+      helpLoad: "Load segment (current list order)",
       helpSpeed: "Adjust active segment speed",
       helpDelete: "Delete active",
       helpStop: "Stop loop",
@@ -323,6 +329,18 @@
     }, durationMs);
 
     updateUI();
+  }
+
+  function trackAnalyticsEvent(eventName, params = {}) {
+    try {
+      chrome.runtime.sendMessage({
+        type: "trackAnalyticsEvent",
+        eventName,
+        params,
+      });
+    } catch (_error) {
+      // Ignore analytics failures so the core extension flow stays unaffected.
+    }
   }
 
 
@@ -688,6 +706,15 @@
       );
     }
 
+    if (isLooping) {
+      trackAnalyticsEvent("loop_started", {
+        source: wasPlaylistLooping ? "playlist_to_single" : "single_loop",
+        start_seconds: Number(pointA.toFixed(3)),
+        end_seconds: Number(pointB.toFixed(3)),
+        has_saved_segment: activeSegmentId !== null,
+      });
+    }
+
     updateUI();
   }
 
@@ -802,6 +829,14 @@
         "success"
       );
     }
+
+    trackAnalyticsEvent("segment_saved", {
+      video_id: getVideoId() || "unknown",
+      start_seconds: Number(segment.start.toFixed(3)),
+      end_seconds: Number(segment.end.toFixed(3)),
+      saved_segments_count: segments.length,
+      playback_rate: segment.playbackRate,
+    });
   }
 
   async function deleteSegment(id) {
@@ -818,6 +853,34 @@
     }
     await renderSegments();
     updateUI();
+  }
+
+  async function reorderSegments(sourceId, targetId, insertAfter = false) {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+
+    const segments = await getCurrentVideoSegments();
+    const sourceIndex = segments.findIndex((segment) => segment.id === sourceId);
+    const targetIndex = segments.findIndex((segment) => segment.id === targetId);
+
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const [movedSegment] = segments.splice(sourceIndex, 1);
+    let nextIndex = targetIndex;
+
+    if (sourceIndex < targetIndex) {
+      nextIndex -= 1;
+    }
+    if (insertAfter) {
+      nextIndex += 1;
+    }
+
+    nextIndex = Math.max(0, Math.min(nextIndex, segments.length));
+    segments.splice(nextIndex, 0, movedSegment);
+
+    await saveCurrentVideoSegments(segments);
+    await renderSegments();
+    updateUI();
+    showToast(t("toastSegmentsReordered"), "success", 1600);
   }
 
   async function deleteActiveSegment() {
@@ -915,6 +978,10 @@
     isPlaylistLooping = true;
     activateSegment(segments[0], { fromPlaylist: true });
     showToast(t("toastPlaylistLoopOn"), "success");
+    trackAnalyticsEvent("playlist_loop_started", {
+      video_id: getVideoId() || "unknown",
+      saved_segments_count: segments.length,
+    });
     updateUI();
   }
 
@@ -984,9 +1051,16 @@
 
     list.innerHTML = "";
 
+    const clearDragState = () => {
+      list.querySelectorAll(".ytal-item").forEach((node) => {
+        node.classList.remove("dragging", "drag-over-before", "drag-over-after");
+      });
+    };
+
     segments.forEach((segment, index) => {
       const item = document.createElement("div");
       item.className = "ytal-item";
+      item.dataset.segmentId = segment.id;
 
       const isActive = isSegmentActive(segment);
 
@@ -998,12 +1072,33 @@
       mainBtn.className = "ytal-item-main";
       mainBtn.setAttribute("role", "button");
       mainBtn.tabIndex = 0;
+      const dragHandle = document.createElement("button");
+      dragHandle.className = "ytal-mini-btn ytal-drag-handle";
+      dragHandle.type = "button";
+      dragHandle.draggable = true;
+      dragHandle.title = t("reorder");
+      dragHandle.setAttribute("aria-label", t("reorder"));
+      dragHandle.innerHTML = `
+        <svg class="ytal-drag-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 2v20" />
+          <path d="M2 12h20" />
+          <path d="m9 5 3-3 3 3" />
+          <path d="m9 19 3 3 3-3" />
+          <path d="m5 9-3 3 3 3" />
+          <path d="m19 9 3 3-3 3" />
+        </svg>
+      `;
+      dragHandle.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
       mainBtn.innerHTML = `
         <div class="ytal-item-title-row">
           <div class="ytal-item-title-group">
             <div class="ytal-item-title">${index + 1}. ${escapeHtml(segment.title)}</div>
-            <button class="ytal-edit-btn" type="button" title="${t("editTitle")}" aria-label="${t("editTitle")}">✎</button>
           </div>
+          <button class="ytal-edit-btn" type="button" title="${t("editTitle")}" aria-label="${t("editTitle")}">✎</button>
         </div>
         <div class="ytal-item-meta">
           <div class="ytal-item-time-editor">
@@ -1018,6 +1113,7 @@
           </div>
         </div>
       `;
+      mainBtn.querySelector(".ytal-item-title-group")?.prepend(dragHandle);
       if (index < 9) {
         mainBtn.title = `${t("tipSegment")} ${index + 1}`;
       }
@@ -1100,6 +1196,48 @@
       delBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         deleteSegment(segment.id);
+      });
+
+      dragHandle.addEventListener("dragstart", (e) => {
+        draggedSegmentId = segment.id;
+        item.classList.add("dragging");
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", segment.id);
+        }
+      });
+
+      item.addEventListener("dragover", (e) => {
+        if (!draggedSegmentId || draggedSegmentId === segment.id) return;
+        e.preventDefault();
+
+        const rect = item.getBoundingClientRect();
+        const insertAfter = e.clientY - rect.top > rect.height / 2;
+        item.classList.toggle("drag-over-before", !insertAfter);
+        item.classList.toggle("drag-over-after", insertAfter);
+      });
+
+      item.addEventListener("dragleave", (e) => {
+        if (!item.contains(e.relatedTarget)) {
+          item.classList.remove("drag-over-before", "drag-over-after");
+        }
+      });
+
+      item.addEventListener("drop", async (e) => {
+        if (!draggedSegmentId || draggedSegmentId === segment.id) return;
+        e.preventDefault();
+
+        const rect = item.getBoundingClientRect();
+        const insertAfter = e.clientY - rect.top > rect.height / 2;
+        clearDragState();
+        const sourceId = draggedSegmentId;
+        draggedSegmentId = null;
+        await reorderSegments(sourceId, segment.id, insertAfter);
+      });
+
+      dragHandle.addEventListener("dragend", () => {
+        draggedSegmentId = null;
+        clearDragState();
       });
 
       actions.appendChild(delBtn);
@@ -2121,6 +2259,7 @@
   // ── Init ──
   async function resetForVideoChange() {
     currentVideoId = getVideoId();
+    hasTrackedPageView = false;
     teardownRoot();
 
     if (!isWatchPage() || !currentVideoId) {
@@ -2133,6 +2272,7 @@
     await renderSegments();
     updateUI();
     startWatcher();
+    trackCurrentPageView();
   }
 
   async function init() {
@@ -2143,7 +2283,20 @@
     await renderSegments();
     updateUI();
     startWatcher();
+    trackCurrentPageView();
     showToast(t("toastShortcutsIntro"));
+  }
+
+  function trackCurrentPageView() {
+    if (hasTrackedPageView || !currentVideoId) {
+      return;
+    }
+
+    hasTrackedPageView = true;
+    trackAnalyticsEvent("youtube_page_loaded", {
+      video_id: currentVideoId,
+      page_language: document.documentElement?.lang || lang,
+    });
   }
 
   function watchUrlChange() {
