@@ -9,6 +9,10 @@
   const PLAYBACK_RATE_STEP = 0.05;
   const PANEL_TRANSITION_MS = 260;
   const FULLSCREEN_PEEK_HIDE_MS = 2400;
+  const VIDEO_ZOOM_STEP = 0.1;
+  const VIDEO_ZOOM_MIN = 1;
+  const VIDEO_ZOOM_MAX = 3;
+  const VIDEO_PAN_STEP = 6;
 
   let pointA = null;
   let pointB = null;
@@ -32,11 +36,17 @@
 
   let isCollapsed = false;
   let isHelpOpen = false;
+  let isZoomOpen = false;
   let lang = "en";
+  let videoZoom = 1;
+  let videoPanX = 0;
+  let videoPanY = 0;
 
   let rootEl = null;
   let toastEl = null;
   let inlineLauncherEl = null;
+  let zoomLauncherEl = null;
+  let zoomPopupEl = null;
   let nativeRangeEl = null;
   let nativeMarkerAEl = null;
   let nativeMarkerBEl = null;
@@ -89,10 +99,24 @@
       toastPlaylistLoopOff: "구간 전체 반복을 멈췄어요.",
       toastPlaylistToLoopOn: (start, end) =>
         `구간 전체 반복을 끝내고 현재 구간 반복으로 전환했어요. ${start} ~ ${end}`,
-      toastShortcutsIntro: "단축키: A (시작), B (끝), L (구간 반복), Shift + L (구간 전체 반복), S (저장), 1-9 (현재 목록 순서대로 불러오기), R (리셋), + / - (구간 배속)",
+      toastShortcutsIntro: "단축키: A (시작), B (끝), L (구간 반복), Shift + L (구간 전체 반복), S (저장), 1-9 (현재 목록 순서대로 불러오기), R (리셋), + / - (구간 배속), Alt + = / - / Arrow / 0 (확대)",
       savedSegments: "저장한 구간",
       shortcuts: "단축키",
       hideShortcuts: "단축키 숨기기",
+      zoomSection: "보기 보조",
+      zoomToggle: "Zoom",
+      zoomHide: "Zoom 닫기",
+      zoomLabel: "영상 확대",
+      zoomIn: "확대",
+      zoomOut: "축소",
+      zoomReset: "초기화",
+      zoomResetDesc: "배율과 위치 리셋",
+      zoomPosition: "방향 이동",
+      panUp: "위로",
+      panDown: "아래로",
+      panLeft: "왼쪽",
+      panRight: "오른쪽",
+      zoomValue: (value) => `${Math.round(value * 100)}%`,
       noSegments: "아직 저장한 구간이 없습니다.",
       emptyGuide: "재생바의 A·B 마커를 드래그하거나 키보드 A·B 키로 구간을 설정한 뒤 루프나 저장을 사용해 보세요.",
       delete: "삭제",
@@ -120,6 +144,9 @@
       helpSpeed: "활성 구간 배속 조절",
       helpDelete: "활성 구간 삭제",
       helpStop: "루프 정지",
+      helpZoom: "영상 확대/축소",
+      helpPan: "확대 영상 이동",
+      helpZoomReset: "영상 확대 초기화",
       tipLoop: "반복 하기 (L)",
       tipSave: "목록에 저장 (S)",
       tipReset: "선택 리셋 (R)",
@@ -173,10 +200,24 @@
       toastPlaylistLoopOff: "Looping all segments stopped.",
       toastPlaylistToLoopOn: (start, end) =>
         `Looping all segments ended and AB loop started for the current range. ${start} ~ ${end}`,
-      toastShortcutsIntro: "Shortcuts: A (start), B (end), L (loop range), Shift + L (loop all segments), S (save), 1-9 (load by current list order), R (reset), + / - (segment speed)",
+      toastShortcutsIntro: "Shortcuts: A (start), B (end), L (loop range), Shift + L (loop all segments), S (save), 1-9 (load by current list order), R (reset), + / - (segment speed), Alt + = / - / Arrow / 0 (zoom)",
       savedSegments: "Saved Segments",
       shortcuts: "Shortcuts",
       hideShortcuts: "Hide Shortcuts",
+      zoomSection: "View Helper",
+      zoomToggle: "Zoom",
+      zoomHide: "Hide Zoom",
+      zoomLabel: "Video Zoom",
+      zoomIn: "Zoom In",
+      zoomOut: "Zoom Out",
+      zoomReset: "Reset",
+      zoomResetDesc: "Reset zoom and position",
+      zoomPosition: "Move Frame",
+      panUp: "Up",
+      panDown: "Down",
+      panLeft: "Left",
+      panRight: "Right",
+      zoomValue: (value) => `${Math.round(value * 100)}%`,
       noSegments: "No saved segments yet.",
       emptyGuide: "Drag the A·B markers on the timeline, or use the A and B keys, to set your range, then use Loop or Save.",
       delete: "Delete",
@@ -204,6 +245,9 @@
       helpSpeed: "Adjust active segment speed",
       helpDelete: "Delete active",
       helpStop: "Stop loop",
+      helpZoom: "Zoom video in or out",
+      helpPan: "Pan the zoomed video",
+      helpZoomReset: "Reset video zoom",
       tipLoop: "Play Loop (L)",
       tipSave: "Save to List (S)",
       tipReset: "Reset selection (R)",
@@ -418,6 +462,31 @@
     return t("speedValue")(normalizePlaybackRate(value).toFixed(2).replace(/\.?0+$/, ""));
   }
 
+  function normalizeVideoZoom(value) {
+    const zoom = Number(value);
+    if (!Number.isFinite(zoom)) return VIDEO_ZOOM_MIN;
+    return Math.min(
+      VIDEO_ZOOM_MAX,
+      Math.max(VIDEO_ZOOM_MIN, Math.round(zoom / VIDEO_ZOOM_STEP) * VIDEO_ZOOM_STEP)
+    );
+  }
+
+  function getVideoPanLimit(zoom = videoZoom) {
+    if (zoom <= 1) return 0;
+    return Math.max(0, Math.round((zoom - 1) * 50));
+  }
+
+  function normalizeVideoPan(value, zoom = videoZoom) {
+    const pan = Number(value);
+    if (!Number.isFinite(pan)) return 0;
+    const limit = getVideoPanLimit(zoom);
+    return Math.min(limit, Math.max(-limit, Math.round(pan)));
+  }
+
+  function getVideoZoomLabel() {
+    return t("zoomValue")(videoZoom);
+  }
+
   function getSegmentPlaybackRate(segment) {
     return normalizePlaybackRate(segment?.playbackRate ?? 1);
   }
@@ -542,7 +611,11 @@
     const store = await getUiStore();
     store.isCollapsed = isCollapsed;
     store.isHelpOpen = isHelpOpen;
+    store.isZoomOpen = isZoomOpen;
     store.lang = lang;
+    store.videoZoom = videoZoom;
+    store.videoPanX = videoPanX;
+    store.videoPanY = videoPanY;
     await setUiStore(store);
   }
 
@@ -550,10 +623,77 @@
     const store = await getUiStore();
     isCollapsed = !!store.isCollapsed;
     isHelpOpen = !!store.isHelpOpen;
+    isZoomOpen = !!store.isZoomOpen;
     lang =
       store.lang === "ko" || store.lang === "en"
         ? store.lang
         : detectDefaultLang();
+    videoZoom = normalizeVideoZoom(store.videoZoom);
+    videoPanX = normalizeVideoPan(store.videoPanX, videoZoom);
+    videoPanY = normalizeVideoPan(store.videoPanY, videoZoom);
+  }
+
+  function clearVideoZoomStyles() {
+    const video = getVideo();
+    if (!video) return;
+    video.style.transform = "";
+    video.style.transformOrigin = "";
+    video.style.willChange = "";
+  }
+
+  function applyVideoZoom() {
+    const video = getVideo();
+    if (!video) return;
+
+    if (videoZoom <= 1) {
+      clearVideoZoomStyles();
+      return;
+    }
+
+    video.style.transformOrigin = "center center";
+    video.style.transform = `translate(${videoPanX}%, ${videoPanY}%) scale(${videoZoom})`;
+    video.style.willChange = "transform";
+  }
+
+  async function updateVideoZoom(delta) {
+    const nextZoom = normalizeVideoZoom(videoZoom + delta);
+    if (nextZoom === videoZoom) return;
+    videoZoom = nextZoom;
+    videoPanX = normalizeVideoPan(videoPanX, videoZoom);
+    videoPanY = normalizeVideoPan(videoPanY, videoZoom);
+    applyVideoZoom();
+    updateUI();
+    await saveUiState();
+  }
+
+  async function nudgeVideoPan(axis, delta) {
+    if (videoZoom <= 1) {
+      videoZoom = normalizeVideoZoom(VIDEO_ZOOM_MIN + VIDEO_ZOOM_STEP);
+    }
+
+    if (axis === "x") {
+      const nextX = normalizeVideoPan(videoPanX + delta, videoZoom);
+      if (nextX === videoPanX) return;
+      videoPanX = nextX;
+    } else {
+      const nextY = normalizeVideoPan(videoPanY + delta, videoZoom);
+      if (nextY === videoPanY) return;
+      videoPanY = nextY;
+    }
+
+    applyVideoZoom();
+    updateUI();
+    await saveUiState();
+  }
+
+  async function resetVideoZoom() {
+    if (videoZoom === 1 && videoPanX === 0 && videoPanY === 0) return;
+    videoZoom = 1;
+    videoPanX = 0;
+    videoPanY = 0;
+    clearVideoZoomStyles();
+    updateUI();
+    await saveUiState();
   }
 
   async function getCurrentVideoSegments() {
@@ -1269,6 +1409,15 @@
     const resetBtn = document.getElementById("ytal-reset-selection");
     const collapseBtn = document.getElementById("ytal-toggle-collapse");
     const revealBtn = document.getElementById("ytal-reveal-panel");
+    const zoomValue = document.getElementById("ytal-zoom-value");
+    const zoomOutBtn = document.getElementById("ytal-zoom-out");
+    const zoomInBtn = document.getElementById("ytal-zoom-in");
+    const zoomResetBtn = document.getElementById("ytal-zoom-reset");
+    const panUpBtn = document.getElementById("ytal-pan-up");
+    const panDownBtn = document.getElementById("ytal-pan-down");
+    const panLeftBtn = document.getElementById("ytal-pan-left");
+    const panRightBtn = document.getElementById("ytal-pan-right");
+    const panLabel = document.getElementById("ytal-pan-label");
     const video = getVideo();
     const duration = video?.duration || 0;
     const currentTime = video?.currentTime || 0;
@@ -1290,6 +1439,8 @@
         ? t("rangeSummaryReady")(format(pointA), format(pointB))
         : t("rangeSummaryPending");
     }
+
+    applyVideoZoom();
 
     if (toastEl) {
       toastEl.textContent = toastMessage;
@@ -1374,6 +1525,16 @@
       helpBtn.title = t("tipShortcuts");
     }
 
+    if (zoomLauncherEl) {
+      zoomLauncherEl.title = isZoomOpen ? t("zoomHide") : t("zoomToggle");
+      zoomLauncherEl.setAttribute("aria-label", isZoomOpen ? t("zoomHide") : t("zoomToggle"));
+      zoomLauncherEl.classList.toggle("active", isZoomOpen);
+      zoomLauncherEl.innerHTML = `
+        <span class="ytal-zoom-launcher-label">${t("zoomToggle")}</span>
+        <span class="ytal-zoom-launcher-icon" aria-hidden="true">&#x26f6;</span>
+      `;
+    }
+
     if (helpPanel) {
       helpPanel.classList.toggle("open", isHelpOpen);
       helpPanel.innerHTML = `
@@ -1387,6 +1548,9 @@
         <div class="ytal-help-row"><kbd>+ / -</kbd> ${t("helpSpeed")}</div>
         <div class="ytal-help-row"><kbd>Del</kbd> ${t("helpDelete")}</div>
         <div class="ytal-help-row"><kbd>Esc</kbd> ${t("helpStop")}</div>
+        <div class="ytal-help-row"><kbd>Alt + = / -</kbd> ${t("helpZoom")}</div>
+        <div class="ytal-help-row"><kbd>Alt + Arrow</kbd> ${t("helpPan")}</div>
+        <div class="ytal-help-row"><kbd>Alt + 0</kbd> ${t("helpZoomReset")}</div>
       `;
     }
 
@@ -1409,7 +1573,55 @@
       `;
     }
 
+    if (zoomValue) {
+      zoomValue.textContent = getVideoZoomLabel();
+    }
+
+    if (zoomOutBtn) {
+      zoomOutBtn.textContent = t("zoomOut");
+      zoomOutBtn.disabled = videoZoom <= VIDEO_ZOOM_MIN;
+    }
+
+    if (zoomInBtn) {
+      zoomInBtn.textContent = t("zoomIn");
+      zoomInBtn.disabled = videoZoom >= VIDEO_ZOOM_MAX;
+    }
+
+    if (zoomResetBtn) {
+      zoomResetBtn.textContent = t("zoomReset");
+      zoomResetBtn.title = t("zoomResetDesc");
+      zoomResetBtn.disabled = videoZoom === 1 && videoPanX === 0 && videoPanY === 0;
+    }
+
+    const canPan = videoZoom > 1;
+
+    if (panUpBtn) {
+      panUpBtn.textContent = t("panUp");
+      panUpBtn.disabled = !canPan;
+    }
+
+    if (panDownBtn) {
+      panDownBtn.textContent = t("panDown");
+      panDownBtn.disabled = !canPan;
+    }
+
+    if (panLeftBtn) {
+      panLeftBtn.textContent = t("panLeft");
+      panLeftBtn.disabled = !canPan;
+    }
+
+    if (panRightBtn) {
+      panRightBtn.textContent = t("panRight");
+      panRightBtn.disabled = !canPan;
+    }
+
+    if (panLabel) {
+      panLabel.textContent = t("zoomPosition");
+    }
+
     syncInlineLauncher();
+    syncZoomLauncher();
+    updateZoomPopupPlacement();
     rootEl.classList.toggle(
       "ytal-fullscreen-peek-visible",
       rootMountEl !== document.body && isCollapsed && isFullscreenPeekVisible
@@ -1450,6 +1662,31 @@
     }
 
     return null;
+  }
+
+  function getSubscribeButtonAnchor() {
+    const selectors = [
+      "ytd-watch-metadata ytd-subscribe-button-renderer",
+      "ytd-watch-flexy ytd-subscribe-button-renderer",
+      "#subscribe-button ytd-subscribe-button-renderer",
+      "#subscribe-button",
+      "ytd-button-renderer.ytd-subscribe-button-renderer",
+    ];
+
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el) return el;
+    }
+
+    return null;
+  }
+
+  function getPlayerControlsHost() {
+    return (
+      document.querySelector(".ytp-right-controls") ||
+      document.querySelector(".ytp-left-controls") ||
+      null
+    );
   }
 
   function getFullscreenHost() {
@@ -1493,6 +1730,134 @@
     return inlineLauncherEl;
   }
 
+  function ensureZoomLauncher() {
+    if (zoomLauncherEl) return zoomLauncherEl;
+
+    zoomLauncherEl = document.createElement("button");
+    zoomLauncherEl.type = "button";
+    zoomLauncherEl.id = "ytal-zoom-launcher";
+    zoomLauncherEl.className = "ytal-zoom-launcher";
+    zoomLauncherEl.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isZoomOpen = !isZoomOpen;
+      updateUI();
+      schedulePlacementUpdate();
+      await saveUiState();
+    });
+
+    return zoomLauncherEl;
+  }
+
+  function ensureZoomPopup() {
+    if (zoomPopupEl) return zoomPopupEl;
+
+    zoomPopupEl = document.createElement("div");
+    zoomPopupEl.id = "ytal-zoom-popup";
+    zoomPopupEl.className = "ytal-zoom-card";
+    zoomPopupEl.innerHTML = `
+      <div class="ytal-section-row ytal-section-row-compact">
+        <div class="ytal-section-label">${t("zoomSection")}</div>
+        <div class="ytal-zoom-value" id="ytal-zoom-value">${getVideoZoomLabel()}</div>
+      </div>
+      <div class="ytal-zoom-copy">${t("zoomLabel")}</div>
+      <div class="ytal-zoom-controls">
+        <button class="ytal-section-chip" id="ytal-zoom-out" type="button">${t("zoomOut")}</button>
+        <button class="ytal-section-chip" id="ytal-zoom-in" type="button">${t("zoomIn")}</button>
+        <button class="ytal-section-chip ytal-section-chip-reset" id="ytal-zoom-reset" type="button" title="${t("zoomResetDesc")}">${t("zoomReset")}</button>
+      </div>
+      <div class="ytal-pan-grid" aria-label="${t("zoomPosition")}">
+        <span></span>
+        <button class="ytal-pan-btn" id="ytal-pan-up" type="button">&#8593; ${t("panUp")}</button>
+        <span></span>
+        <button class="ytal-pan-btn" id="ytal-pan-left" type="button">&#8592; ${t("panLeft")}</button>
+        <div class="ytal-pan-label ytal-pan-btn-center" id="ytal-pan-label">${t("zoomPosition")}</div>
+        <button class="ytal-pan-btn" id="ytal-pan-right" type="button">&#8594; ${t("panRight")}</button>
+        <span></span>
+        <button class="ytal-pan-btn" id="ytal-pan-down" type="button">&#8595; ${t("panDown")}</button>
+        <span></span>
+      </div>
+    `;
+    document.body.appendChild(zoomPopupEl);
+
+    document
+      .getElementById("ytal-zoom-out")
+      .addEventListener("click", () => updateVideoZoom(-VIDEO_ZOOM_STEP));
+
+    document
+      .getElementById("ytal-zoom-in")
+      .addEventListener("click", () => updateVideoZoom(VIDEO_ZOOM_STEP));
+
+    document
+      .getElementById("ytal-zoom-reset")
+      .addEventListener("click", resetVideoZoom);
+
+    document
+      .getElementById("ytal-pan-up")
+      .addEventListener("click", () => nudgeVideoPan("y", VIDEO_PAN_STEP));
+
+    document
+      .getElementById("ytal-pan-down")
+      .addEventListener("click", () => nudgeVideoPan("y", -VIDEO_PAN_STEP));
+
+    document
+      .getElementById("ytal-pan-left")
+      .addEventListener("click", () => nudgeVideoPan("x", VIDEO_PAN_STEP));
+
+    document
+      .getElementById("ytal-pan-right")
+      .addEventListener("click", () => nudgeVideoPan("x", -VIDEO_PAN_STEP));
+
+    return zoomPopupEl;
+  }
+
+  function syncZoomLauncher() {
+    const shouldShow = isWatchPage();
+    const host = shouldShow ? getPlayerControlsHost() : null;
+
+    if (!shouldShow || !host) {
+      if (zoomLauncherEl?.isConnected) zoomLauncherEl.remove();
+      if (zoomPopupEl?.isConnected) zoomPopupEl.classList.remove("open");
+      return;
+    }
+
+    const launcher = ensureZoomLauncher();
+    launcher.title = isZoomOpen ? t("zoomHide") : t("zoomToggle");
+    launcher.setAttribute("aria-label", isZoomOpen ? t("zoomHide") : t("zoomToggle"));
+    launcher.innerHTML = `
+      <span class="ytal-zoom-launcher-label">${t("zoomToggle")}</span>
+      <span class="ytal-zoom-launcher-icon" aria-hidden="true">&#x26f6;</span>
+    `;
+
+    if (launcher.parentElement !== host || host.firstChild !== launcher) {
+      host.insertBefore(launcher, host.firstChild);
+    }
+
+    ensureZoomPopup();
+    updateZoomPopupPlacement();
+  }
+
+  function updateZoomPopupPlacement() {
+    if (!zoomPopupEl) return;
+
+    const shouldShow = isZoomOpen && zoomLauncherEl?.isConnected;
+    zoomPopupEl.classList.toggle("open", !!shouldShow);
+
+    if (!shouldShow) return;
+
+    const rect = zoomLauncherEl.getBoundingClientRect();
+    const popupWidth = Math.min(300, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(rect.right - popupWidth, window.innerWidth - popupWidth - 12));
+    const popupHeight = Math.max(zoomPopupEl.offsetHeight || 0, 214);
+    const top = Math.max(12, rect.top - popupHeight - 10);
+
+    zoomPopupEl.style.position = "fixed";
+    zoomPopupEl.style.top = `${top}px`;
+    zoomPopupEl.style.left = `${left}px`;
+    zoomPopupEl.style.right = "auto";
+    zoomPopupEl.style.width = `${popupWidth}px`;
+  }
+
   function syncInlineLauncher() {
     const shouldUseInlineLauncher =
       !!rootEl &&
@@ -1517,8 +1882,13 @@
       <span class="ytal-inline-launcher-icon" aria-hidden="true">&#x2922;</span>
     `;
 
-    if (launcher.parentElement !== host || host.firstElementChild !== launcher) {
-      host.insertBefore(launcher, host.firstChild);
+    const zoomSibling =
+      zoomLauncherEl?.isConnected && zoomLauncherEl.parentElement === host
+        ? zoomLauncherEl.nextSibling
+        : host.firstChild;
+
+    if (launcher.parentElement !== host || launcher !== zoomSibling) {
+      host.insertBefore(launcher, zoomSibling);
     }
 
     rootEl.classList.add("ytal-has-inline-launcher");
@@ -1801,6 +2171,8 @@
 
     syncRootMountTarget();
     syncInlineLauncher();
+    syncZoomLauncher();
+    updateZoomPopupPlacement();
 
     if (rootMountEl && rootMountEl !== document.body) {
       rootEl.classList.remove("ytal-docked");
@@ -1859,6 +2231,13 @@
         showFullscreenPeekTemporarily();
       }
     }, true);
+    document.addEventListener("click", async (e) => {
+      if (!isZoomOpen) return;
+      if (zoomLauncherEl?.contains(e.target) || zoomPopupEl?.contains(e.target)) return;
+      isZoomOpen = false;
+      updateUI();
+      await saveUiState();
+    });
     document.addEventListener("fullscreenchange", schedulePlacementUpdate);
     document.addEventListener("webkitfullscreenchange", schedulePlacementUpdate);
     document.addEventListener("mozfullscreenchange", schedulePlacementUpdate);
@@ -1943,6 +2322,9 @@
           <div class="ytal-help-row"><kbd>+ / -</kbd> ${t("helpSpeed")}</div>
           <div class="ytal-help-row"><kbd>Del</kbd> ${t("helpDelete")}</div>
           <div class="ytal-help-row"><kbd>Esc</kbd> ${t("helpStop")}</div>
+          <div class="ytal-help-row"><kbd>Alt + = / -</kbd> ${t("helpZoom")}</div>
+          <div class="ytal-help-row"><kbd>Alt + Arrow</kbd> ${t("helpPan")}</div>
+          <div class="ytal-help-row"><kbd>Alt + 0</kbd> ${t("helpZoomReset")}</div>
         </div>
 
         <div class="ytal-copyright">© 2026 JinHyeWon</div>
@@ -2115,6 +2497,34 @@
           clearCurrentSelection();
           updateUI();
           renderSegments();
+        } else if (e.altKey && (code === "Equal" || code === "NumpadAdd")) {
+          e.preventDefault();
+          e.stopPropagation();
+          await updateVideoZoom(VIDEO_ZOOM_STEP);
+        } else if (e.altKey && (code === "Minus" || code === "NumpadSubtract")) {
+          e.preventDefault();
+          e.stopPropagation();
+          await updateVideoZoom(-VIDEO_ZOOM_STEP);
+        } else if (e.altKey && code === "Digit0") {
+          e.preventDefault();
+          e.stopPropagation();
+          await resetVideoZoom();
+        } else if (e.altKey && code === "ArrowUp") {
+          e.preventDefault();
+          e.stopPropagation();
+          await nudgeVideoPan("y", VIDEO_PAN_STEP);
+        } else if (e.altKey && code === "ArrowDown") {
+          e.preventDefault();
+          e.stopPropagation();
+          await nudgeVideoPan("y", -VIDEO_PAN_STEP);
+        } else if (e.altKey && code === "ArrowLeft") {
+          e.preventDefault();
+          e.stopPropagation();
+          await nudgeVideoPan("x", VIDEO_PAN_STEP);
+        } else if (e.altKey && code === "ArrowRight") {
+          e.preventDefault();
+          e.stopPropagation();
+          await nudgeVideoPan("x", -VIDEO_PAN_STEP);
         } else if (
           code === "Minus" ||
           code === "NumpadSubtract"
@@ -2225,6 +2635,7 @@
     defaultPlaybackRate = 1;
     restorePlaybackRate = null;
     isFullscreenPeekVisible = false;
+    clearVideoZoomStyles();
 
     if (nativeRangeEl) {
       nativeRangeEl.remove();
@@ -2252,6 +2663,16 @@
     if (inlineLauncherEl) {
       inlineLauncherEl.remove();
       inlineLauncherEl = null;
+    }
+
+    if (zoomLauncherEl) {
+      zoomLauncherEl.remove();
+      zoomLauncherEl = null;
+    }
+
+    if (zoomPopupEl) {
+      zoomPopupEl.remove();
+      zoomPopupEl = null;
     }
 
   }
