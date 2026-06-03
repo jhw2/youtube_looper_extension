@@ -5,15 +5,27 @@
     <title>YouTube Looper - A-B Repeat & Save Segments</title>
     <style>
       :root {
-        --bg: #fff8f5;
-        --card: rgba(255, 255, 255, 0.92);
-        --border: rgba(146, 34, 13, 0.12);
-        --text: #2f1612;
-        --muted: #6f554f;
-        --accent: #d9481d;
-        --accent-strong: #b93813;
-        --soft: rgba(217, 72, 29, 0.1);
-        --shadow: 0 18px 36px rgba(121, 45, 22, 0.12);
+        --bg: #141418;
+        --card: rgba(20, 20, 24, 0.96);
+        --panel: rgba(255, 255, 255, 0.04);
+        --panel-hover: rgba(255, 255, 255, 0.07);
+        --panel-strong: rgba(255, 255, 255, 0.09);
+        --border: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.12);
+        --text: #f5f5f7;
+        --muted: #a1a1aa;
+        --soft: #71717a;
+        --accent: #7c8cff;
+        --accent-soft: rgba(124, 140, 255, 0.14);
+        --loop: rgba(52, 211, 153, 0.18);
+        --loop-border: rgba(52, 211, 153, 0.3);
+        --loop-text: #d1fae5;
+        --save: rgba(251, 191, 36, 0.18);
+        --save-border: rgba(251, 191, 36, 0.3);
+        --save-text: #fef3c7;
+        --danger: rgba(255, 107, 107, 0.18);
+        --danger-border: rgba(255, 107, 107, 0.3);
+        --shadow: 0 18px 36px rgba(0, 0, 0, 0.35);
       }
 
       * {
@@ -22,16 +34,17 @@
 
       body {
         margin: 0;
-        width: 320px;
+        width: 332px;
         font-family: "SF Pro Display", "Segoe UI", sans-serif;
         background:
-          radial-gradient(circle at top left, rgba(255, 214, 194, 0.75), transparent 44%),
-          linear-gradient(180deg, #fff8f5 0%, #fff2ec 100%);
+          radial-gradient(circle at top left, rgba(124, 140, 255, 0.14), transparent 38%),
+          radial-gradient(circle at bottom right, rgba(244, 114, 182, 0.12), transparent 34%),
+          linear-gradient(180deg, #111216 0%, #181a20 100%);
         color: var(--text);
       }
 
       .shell {
-        padding: 18px;
+        padding: 16px;
       }
 
       .card {
@@ -40,7 +53,7 @@
         padding: 18px;
         background: var(--card);
         box-shadow: var(--shadow);
-        backdrop-filter: blur(8px);
+        backdrop-filter: blur(10px);
       }
 
       .badge {
@@ -49,8 +62,8 @@
         gap: 6px;
         padding: 6px 10px;
         border-radius: 999px;
-        background: var(--soft);
-        color: var(--accent-strong);
+        background: var(--accent-soft);
+        color: #c7d2fe;
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.04em;
@@ -58,71 +71,54 @@
         margin-bottom: 12px;
       }
 
-      h1 {
-        margin: 0 0 8px;
-        font-size: 22px;
-        line-height: 1.2;
-        letter-spacing: -0.03em;
-      }
-
       .lead {
+        display: none;
         margin: 0;
         font-size: 13px;
         line-height: 1.5;
         color: var(--muted);
       }
 
-      .steps {
-        display: grid;
-        gap: 10px;
-        margin: 16px 0;
+      .quick-list {
+        display: none;
+        gap: 8px;
+        margin: 14px 0 16px;
+        padding: 0;
+        list-style: none;
       }
 
-      .step {
-        display: grid;
-        grid-template-columns: 28px 1fr;
-        gap: 10px;
-        align-items: start;
-        padding: 10px 12px;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.78);
-        border: 1px solid rgba(146, 34, 13, 0.08);
-      }
-
-      .step-index {
-        display: inline-flex;
+      .quick-item {
+        display: flex;
         align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: var(--accent);
-        color: white;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: var(--panel);
+        border: 1px solid var(--border);
         font-size: 12px;
-        font-weight: 800;
-      }
-
-      .step-title {
-        margin: 1px 0 4px;
-        font-size: 13px;
-        font-weight: 700;
-      }
-
-      .step-copy {
-        margin: 0;
-        font-size: 12px;
-        line-height: 1.45;
+        line-height: 1.4;
         color: var(--muted);
       }
 
+      .quick-dot {
+        flex: 0 0 auto;
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #7c8cff 0%, #f472b6 100%);
+      }
+
+      .action-grid {
+        display: grid;
+        gap: 10px;
+      }
+
       button,
-      .web-link {
-        width: 100%;
-        border-radius: 14px;
-        padding: 12px 14px;
-        font-weight: 800;
-        font-size: 14px;
-        text-decoration: none;
+      .web-link,
+      select {
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 700;
         transition:
           transform 0.15s ease,
           background 0.15s ease,
@@ -131,62 +127,166 @@
           box-shadow 0.15s ease;
       }
 
+      button,
+      select {
+        width: 100%;
+      }
+
       button {
-        border: 0;
-        background: linear-gradient(180deg, #e85b2f 0%, #cb4018 100%);
-        color: white;
+        padding: 11px 14px;
         cursor: pointer;
-        box-shadow: 0 12px 22px rgba(217, 72, 29, 0.22);
       }
 
-      button:hover {
+      button:hover,
+      .web-link:hover,
+      select:hover {
         transform: translateY(-1px);
-        background: linear-gradient(180deg, #ee6840 0%, #cf4318 100%);
       }
 
-      .subcopy {
-        margin: 14px 0 8px;
-        font-size: 12px;
-        line-height: 1.45;
-        color: var(--muted);
+      .btn-loop {
+        border: 1px solid var(--loop-border);
+        background: var(--loop);
+        color: var(--loop-text);
+        box-shadow: none;
+      }
+
+      .btn-loop:hover {
+        background: rgba(52, 211, 153, 0.28);
+        border-color: rgba(52, 211, 153, 0.4);
       }
 
       .web-link {
         display: block;
+        width: 100%;
+        padding: 11px 14px;
         text-align: center;
-        border: 1px solid rgba(217, 72, 29, 0.22);
-        background: rgba(255, 255, 255, 0.72);
-        color: var(--accent-strong);
+        text-decoration: none;
+        border: 1px solid var(--save-border);
+        background: var(--save);
+        color: var(--save-text);
       }
 
       .web-link:hover {
-        transform: translateY(-1px);
-        background: rgba(255, 255, 255, 0.96);
-        border-color: rgba(217, 72, 29, 0.34);
+        background: rgba(251, 191, 36, 0.28);
+        border-color: rgba(251, 191, 36, 0.4);
       }
 
       .shortcut-card {
-        margin-top: 12px;
-        padding: 12px 14px;
-        border-radius: 14px;
-        background: rgba(47, 22, 18, 0.04);
-        border: 1px solid rgba(47, 22, 18, 0.06);
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: 16px;
+        background: var(--panel);
+        border: 1px solid var(--border);
       }
 
       .shortcut-label {
         margin: 0 0 6px;
         font-size: 11px;
         font-weight: 700;
-        color: var(--accent-strong);
+        color: #c7d2fe;
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
 
-      .shortcut-copy {
+      .shortcut-desc,
+      .shortcut-copy,
+      .shortcut-meta,
+      .shortcut-status {
         margin: 0;
         font-size: 12px;
         line-height: 1.45;
         color: var(--muted);
+      }
+
+      .shortcut-desc {
+        margin-bottom: 12px;
+      }
+
+      .shortcut-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .shortcut-row {
+        display: grid;
+        grid-template-columns: 1fr 68px;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .shortcut-name {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .shortcut-select {
+        padding: 7px 10px;
+        border: 1px solid var(--border-strong);
+        background: var(--panel-strong);
+        color: var(--text);
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-image:
+          linear-gradient(45deg, transparent 50%, #c7d2fe 50%),
+          linear-gradient(135deg, #c7d2fe 50%, transparent 50%);
+        background-position:
+          calc(100% - 16px) calc(50% - 2px),
+          calc(100% - 11px) calc(50% - 2px);
+        background-size: 5px 5px, 5px 5px;
+        background-repeat: no-repeat;
+        padding-right: 26px;
+        font-size: 12px;
+      }
+
+      .shortcut-select:focus {
+        outline: none;
+        border-color: rgba(124, 140, 255, 0.45);
+        box-shadow: 0 0 0 3px rgba(124, 140, 255, 0.16);
+      }
+
+      .shortcut-loop-all {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+      }
+
+      .shortcut-meta {
+        margin-top: 4px;
+        font-size: 11px;
+      }
+
+      .shortcut-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .shortcut-status {
+        flex: 1;
+        font-size: 11px;
+      }
+
+      .shortcut-status[data-tone="success"] {
+        color: #86efac;
+      }
+
+      .shortcut-reset-btn {
+        width: auto;
+        padding: 9px 12px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        box-shadow: none;
+      }
+
+      .shortcut-reset-btn:hover {
+        background: var(--panel-hover);
+        border-color: var(--border-strong);
       }
     </style>
   </head>
@@ -194,41 +294,30 @@
     <div class="shell">
       <div class="card">
         <div class="badge">AB Loop</div>
-        <h1 id="popup-title"></h1>
         <p id="popup-desc" class="lead"></p>
 
-        <div class="steps">
-          <div class="step">
-            <div class="step-index">1</div>
-            <div>
-              <p id="step-1-title" class="step-title"></p>
-              <p id="step-1-copy" class="step-copy"></p>
-            </div>
-          </div>
-          <div class="step">
-            <div class="step-index">2</div>
-            <div>
-              <p id="step-2-title" class="step-title"></p>
-              <p id="step-2-copy" class="step-copy"></p>
-            </div>
-          </div>
-          <div class="step">
-            <div class="step-index">3</div>
-            <div>
-              <p id="step-3-title" class="step-title"></p>
-              <p id="step-3-copy" class="step-copy"></p>
-            </div>
-          </div>
+        <ul class="quick-list">
+          <li id="popup-quick-1" class="quick-item"><span class="quick-dot"></span><span></span></li>
+          <li id="popup-quick-2" class="quick-item"><span class="quick-dot"></span><span></span></li>
+        </ul>
+
+        <div class="action-grid">
+          <button id="open-youtube" class="btn-loop" type="button"></button>
+          <a id="open-web" class="web-link" href="https://youtube-looper.vercel.app/" target="_blank"></a>
         </div>
-
-        <button id="open-youtube"></button>
-
-        <p id="popup-web-desc" class="subcopy"></p>
-        <a id="open-web" class="web-link" href="https://youtube-looper.vercel.app/" target="_blank"></a>
 
         <div class="shortcut-card">
           <p id="popup-shortcut-label" class="shortcut-label"></p>
-          <p id="popup-shortcuts" class="shortcut-copy"></p>
+          <p id="popup-shortcut-desc" class="shortcut-desc"></p>
+          <div id="popup-shortcut-list" class="shortcut-list"></div>
+          <div class="shortcut-loop-all">
+            <p id="popup-shortcut-loop-all" class="shortcut-copy"></p>
+            <p id="popup-shortcut-meta" class="shortcut-meta"></p>
+          </div>
+          <div class="shortcut-footer">
+            <p id="popup-shortcut-status" class="shortcut-status"></p>
+            <button id="popup-shortcut-reset" class="shortcut-reset-btn" type="button"></button>
+          </div>
         </div>
       </div>
     </div>

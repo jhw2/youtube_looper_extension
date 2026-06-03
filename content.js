@@ -13,6 +13,20 @@
   const VIDEO_ZOOM_MIN = 1;
   const VIDEO_ZOOM_MAX = 3;
   const VIDEO_PAN_STEP = 6;
+  const DEFAULT_SHORTCUTS = Object.freeze({
+    setPointA: "A",
+    setPointB: "B",
+    loop: "L",
+    save: "S",
+    reset: "R",
+  });
+  const SHORTCUT_ACTION_ORDER = Object.freeze([
+    "setPointA",
+    "setPointB",
+    "loop",
+    "save",
+    "reset",
+  ]);
 
   let pointA = null;
   let pointB = null;
@@ -41,6 +55,7 @@
   let videoZoom = 1;
   let videoPanX = 0;
   let videoPanY = 0;
+  let shortcuts = { ...DEFAULT_SHORTCUTS };
 
   let rootEl = null;
   let toastEl = null;
@@ -99,7 +114,8 @@
       toastPlaylistLoopOff: "구간 전체 반복을 멈췄어요.",
       toastPlaylistToLoopOn: (start, end) =>
         `구간 전체 반복을 끝내고 현재 구간 반복으로 전환했어요. ${start} ~ ${end}`,
-      toastShortcutsIntro: "단축키: A (시작), B (끝), L (구간 반복), Shift + L (구간 전체 반복), S (저장), 1-9 (현재 목록 순서대로 불러오기), R (리셋), + / - (구간 배속), Alt + = / - / Arrow / 0 (확대)",
+      toastShortcutsIntro: (setA, setB, loop, loopAll, save, reset) =>
+        `단축키: ${setA} (시작), ${setB} (끝), ${loop} (구간 반복), ${loopAll} (구간 전체 반복), ${save} (저장), 1-9 (현재 목록 순서대로 불러오기), ${reset} (리셋), + / - (구간 배속), Alt + = / - / Arrow / 0 (확대)`,
       savedSegments: "저장한 구간",
       shortcuts: "단축키",
       hideShortcuts: "단축키 숨기기",
@@ -147,9 +163,9 @@
       helpZoom: "영상 확대/축소",
       helpPan: "확대 영상 이동",
       helpZoomReset: "영상 확대 초기화",
-      tipLoop: "반복 하기 (L)",
-      tipSave: "목록에 저장 (S)",
-      tipReset: "선택 리셋 (R)",
+      tipLoop: (shortcut) => `반복 하기 (${shortcut})`,
+      tipSave: (shortcut) => `목록에 저장 (${shortcut})`,
+      tipReset: (shortcut) => `선택 리셋 (${shortcut})`,
       tipPanelOpen: "저장 구간 패널 열기",
       tipPanelClose: "패널 숨기기",
       tipList: "저장 구간 보기",
@@ -200,7 +216,8 @@
       toastPlaylistLoopOff: "Looping all segments stopped.",
       toastPlaylistToLoopOn: (start, end) =>
         `Looping all segments ended and AB loop started for the current range. ${start} ~ ${end}`,
-      toastShortcutsIntro: "Shortcuts: A (start), B (end), L (loop range), Shift + L (loop all segments), S (save), 1-9 (load by current list order), R (reset), + / - (segment speed), Alt + = / - / Arrow / 0 (zoom)",
+      toastShortcutsIntro: (setA, setB, loop, loopAll, save, reset) =>
+        `Shortcuts: ${setA} (start), ${setB} (end), ${loop} (loop range), ${loopAll} (loop all segments), ${save} (save), 1-9 (load by current list order), ${reset} (reset), + / - (segment speed), Alt + = / - / Arrow / 0 (zoom)`,
       savedSegments: "Saved Segments",
       shortcuts: "Shortcuts",
       hideShortcuts: "Hide Shortcuts",
@@ -248,9 +265,9 @@
       helpZoom: "Zoom video in or out",
       helpPan: "Pan the zoomed video",
       helpZoomReset: "Reset video zoom",
-      tipLoop: "Play Loop (L)",
-      tipSave: "Save to List (S)",
-      tipReset: "Reset selection (R)",
+      tipLoop: (shortcut) => `Play Loop (${shortcut})`,
+      tipSave: (shortcut) => `Save to List (${shortcut})`,
+      tipReset: (shortcut) => `Reset selection (${shortcut})`,
       tipPanelOpen: "Open saved segments panel",
       tipPanelClose: "Hide panel",
       tipList: "Show saved segments",
@@ -274,6 +291,71 @@
       navigator.languages?.[0] ||
       "en";
     return browserLang.toLowerCase().startsWith("ko") ? "ko" : "en";
+  }
+
+  function normalizeShortcutValue(value) {
+    if (typeof value !== "string") return null;
+    const normalized = value.trim().toUpperCase();
+    return /^[A-Z]$/.test(normalized) ? normalized : null;
+  }
+
+  function sanitizeShortcutConfig(config) {
+    const next = {};
+    const used = new Set();
+    const fallbackValues = SHORTCUT_ACTION_ORDER.map((action) =>
+      normalizeShortcutValue(DEFAULT_SHORTCUTS[action])
+    );
+
+    SHORTCUT_ACTION_ORDER.forEach((action) => {
+      const preferred =
+        normalizeShortcutValue(config?.[action]) ||
+        normalizeShortcutValue(DEFAULT_SHORTCUTS[action]);
+
+      if (preferred && !used.has(preferred)) {
+        next[action] = preferred;
+        used.add(preferred);
+        return;
+      }
+
+      const fallback = fallbackValues.find((candidate) => candidate && !used.has(candidate));
+      next[action] = fallback || normalizeShortcutValue(DEFAULT_SHORTCUTS[action]);
+      used.add(next[action]);
+    });
+
+    return next;
+  }
+
+  function getShortcutValue(action) {
+    return shortcuts[action] || DEFAULT_SHORTCUTS[action];
+  }
+
+  function formatShortcutLabel(action, options = {}) {
+    const { shift = false } = options;
+    const value = getShortcutValue(action);
+    return shift ? `Shift + ${value}` : value;
+  }
+
+  function getShortcutToastText() {
+    return t("toastShortcutsIntro")(
+      formatShortcutLabel("setPointA"),
+      formatShortcutLabel("setPointB"),
+      formatShortcutLabel("loop"),
+      formatShortcutLabel("loop", { shift: true }),
+      formatShortcutLabel("save"),
+      formatShortcutLabel("reset")
+    );
+  }
+
+  function getShortcutEventValue(event) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return null;
+    const match = /^Key([A-Z])$/.exec(event.code || "");
+    return match ? match[1] : null;
+  }
+
+  function matchesShortcut(event, action, options = {}) {
+    const { shift = false } = options;
+    if (event.shiftKey !== shift) return false;
+    return getShortcutEventValue(event) === getShortcutValue(action);
   }
 
   function buttonMarkup(label, description) {
@@ -487,6 +569,16 @@
     return t("zoomValue")(videoZoom);
   }
 
+  function getZoomAnalyticsParams(extra = {}) {
+    return {
+      video_id: getVideoId() || "unknown",
+      zoom_level: Number(videoZoom.toFixed(2)),
+      pan_x: videoPanX,
+      pan_y: videoPanY,
+      ...extra,
+    };
+  }
+
   function getSegmentPlaybackRate(segment) {
     return normalizePlaybackRate(segment?.playbackRate ?? 1);
   }
@@ -559,14 +651,46 @@
   }
 
   function isTypingTarget(target) {
-    if (!target) return false;
-    const tag = target.tagName;
-    return (
-      tag === "INPUT" ||
-      tag === "TEXTAREA" ||
-      tag === "SELECT" ||
-      target.isContentEditable
+    if (!(target instanceof Element)) return false;
+
+    const editableRoot = target.closest(
+      [
+        "input",
+        "textarea",
+        "select",
+        "[contenteditable='']",
+        "[contenteditable='true']",
+        "[role='textbox']",
+        "[role='searchbox']",
+      ].join(", ")
     );
+
+    return Boolean(editableRoot) || target.isContentEditable;
+  }
+
+  function shouldIgnoreKeyboardShortcut(event) {
+    return (
+      isTypingTarget(event.target) ||
+      isTypingTarget(document.activeElement)
+    );
+  }
+
+  function getHelpPanelMarkup() {
+    return `
+      <div class="ytal-help-row"><kbd>${formatShortcutLabel("setPointA")}</kbd> ${t("helpSetA")}</div>
+      <div class="ytal-help-row"><kbd>${formatShortcutLabel("setPointB")}</kbd> ${t("helpSetB")}</div>
+      <div class="ytal-help-row"><kbd>${formatShortcutLabel("loop")}</kbd> ${t("helpLoop")}</div>
+      <div class="ytal-help-row"><kbd>${formatShortcutLabel("loop", { shift: true })}</kbd> ${t("helpPlaylistLoop")}</div>
+      <div class="ytal-help-row"><kbd>${formatShortcutLabel("save")}</kbd> ${t("helpSave")}</div>
+      <div class="ytal-help-row"><kbd>${formatShortcutLabel("reset")}</kbd> ${t("helpReset")}</div>
+      <div class="ytal-help-row"><kbd>1-9</kbd> ${t("helpLoad")}</div>
+      <div class="ytal-help-row"><kbd>+ / -</kbd> ${t("helpSpeed")}</div>
+      <div class="ytal-help-row"><kbd>Del</kbd> ${t("helpDelete")}</div>
+      <div class="ytal-help-row"><kbd>Esc</kbd> ${t("helpStop")}</div>
+      <div class="ytal-help-row"><kbd>Alt + = / -</kbd> ${t("helpZoom")}</div>
+      <div class="ytal-help-row"><kbd>Alt + Arrow</kbd> ${t("helpPan")}</div>
+      <div class="ytal-help-row"><kbd>Alt + 0</kbd> ${t("helpZoomReset")}</div>
+    `;
   }
 
   function escapeHtml(value) {
@@ -631,6 +755,16 @@
     videoZoom = normalizeVideoZoom(store.videoZoom);
     videoPanX = normalizeVideoPan(store.videoPanX, videoZoom);
     videoPanY = normalizeVideoPan(store.videoPanY, videoZoom);
+    shortcuts = sanitizeShortcutConfig(store.shortcuts);
+  }
+
+  function handleUiStoreChange(nextStore) {
+    const previousShortcuts = JSON.stringify(shortcuts);
+    shortcuts = sanitizeShortcutConfig(nextStore?.shortcuts);
+
+    if (rootEl && previousShortcuts !== JSON.stringify(shortcuts)) {
+      updateUI();
+    }
   }
 
   function clearVideoZoomStyles() {
@@ -663,6 +797,9 @@
     videoPanY = normalizeVideoPan(videoPanY, videoZoom);
     applyVideoZoom();
     updateUI();
+    trackAnalyticsEvent("zoom_level_changed", getZoomAnalyticsParams({
+      action: delta > 0 ? "increase" : "decrease",
+    }));
     await saveUiState();
   }
 
@@ -683,6 +820,10 @@
 
     applyVideoZoom();
     updateUI();
+    trackAnalyticsEvent("zoom_panned", getZoomAnalyticsParams({
+      axis,
+      step: delta,
+    }));
     await saveUiState();
   }
 
@@ -693,6 +834,9 @@
     videoPanY = 0;
     clearVideoZoomStyles();
     updateUI();
+    trackAnalyticsEvent("zoom_reset", getZoomAnalyticsParams({
+      action: "reset",
+    }));
     await saveUiState();
   }
 
@@ -1494,7 +1638,7 @@
         resetBtn.dataset.label = resetLabel;
         resetBtn.innerHTML = resetButtonMarkup(resetLabel);
       }
-      resetBtn.title = t("tipReset");
+      resetBtn.title = t("tipReset")(formatShortcutLabel("reset"));
       resetBtn.setAttribute("aria-label", t("resetSelection"));
       resetBtn.disabled = !hasSelection;
       resetBtn.classList.toggle("active", hasSelection);
@@ -1517,8 +1661,8 @@
 
     updateNativeTimelineOverlay(canLoop, duration);
 
-    if (loopBtn) loopBtn.title = t("tipLoop");
-    if (saveBtn) saveBtn.title = t("tipSave");
+    if (loopBtn) loopBtn.title = t("tipLoop")(formatShortcutLabel("loop"));
+    if (saveBtn) saveBtn.title = t("tipSave")(formatShortcutLabel("save"));
 
     if (helpBtn) {
       helpBtn.textContent = isHelpOpen ? t("hideShortcuts") : t("shortcuts");
@@ -1537,21 +1681,7 @@
 
     if (helpPanel) {
       helpPanel.classList.toggle("open", isHelpOpen);
-      helpPanel.innerHTML = `
-        <div class="ytal-help-row"><kbd>A</kbd> ${t("helpSetA")}</div>
-        <div class="ytal-help-row"><kbd>B</kbd> ${t("helpSetB")}</div>
-        <div class="ytal-help-row"><kbd>L</kbd> ${t("helpLoop")}</div>
-        <div class="ytal-help-row"><kbd>Shift + L</kbd> ${t("helpPlaylistLoop")}</div>
-        <div class="ytal-help-row"><kbd>S</kbd> ${t("helpSave")}</div>
-        <div class="ytal-help-row"><kbd>R</kbd> ${t("helpReset")}</div>
-        <div class="ytal-help-row"><kbd>1-9</kbd> ${t("helpLoad")}</div>
-        <div class="ytal-help-row"><kbd>+ / -</kbd> ${t("helpSpeed")}</div>
-        <div class="ytal-help-row"><kbd>Del</kbd> ${t("helpDelete")}</div>
-        <div class="ytal-help-row"><kbd>Esc</kbd> ${t("helpStop")}</div>
-        <div class="ytal-help-row"><kbd>Alt + = / -</kbd> ${t("helpZoom")}</div>
-        <div class="ytal-help-row"><kbd>Alt + Arrow</kbd> ${t("helpPan")}</div>
-        <div class="ytal-help-row"><kbd>Alt + 0</kbd> ${t("helpZoomReset")}</div>
-      `;
+      helpPanel.innerHTML = getHelpPanelMarkup();
     }
 
     if (langSelect) {
@@ -1743,6 +1873,9 @@
       isZoomOpen = !isZoomOpen;
       updateUI();
       schedulePlacementUpdate();
+      trackAnalyticsEvent("zoom_panel_toggled", getZoomAnalyticsParams({
+        is_open: isZoomOpen,
+      }));
       await saveUiState();
     });
 
@@ -2281,7 +2414,7 @@
       <div class="ytal-body">
         <div class="ytal-timeline-card">
           <div class="ytal-timeline-topbar">
-            <button class="ytal-reset-btn" id="ytal-reset-selection" type="button" title="${t("tipReset")}" aria-label="${t("resetSelection")}">${resetButtonMarkup(t("resetSelection"))}</button>
+            <button class="ytal-reset-btn" id="ytal-reset-selection" type="button" title="${t("tipReset")(formatShortcutLabel("reset"))}" aria-label="${t("resetSelection")}">${resetButtonMarkup(t("resetSelection"))}</button>
           </div>
           <button class="ytal-timeline-track" id="ytal-timeline-track" type="button" aria-label="${t("timelineHint")}" role="slider">
             <span class="ytal-timeline-fill" id="ytal-timeline-fill"></span>
@@ -2297,8 +2430,8 @@
         </div>
 
         <div class="ytal-btn-row">
-          <button class="ytal-btn ytal-btn-loop" id="ytal-loop-btn" title="${t("tipLoop")}">${t("loop")}</button>
-          <button class="ytal-btn ytal-btn-save" id="ytal-save-btn" title="${t("tipSave")}">${t("save")}</button>
+          <button class="ytal-btn ytal-btn-loop" id="ytal-loop-btn" title="${t("tipLoop")(formatShortcutLabel("loop"))}">${t("loop")}</button>
+          <button class="ytal-btn ytal-btn-save" id="ytal-save-btn" title="${t("tipSave")(formatShortcutLabel("save"))}">${t("save")}</button>
         </div>
 
         <div class="ytal-section-row">
@@ -2312,19 +2445,7 @@
         </button>
 
         <div id="ytal-help-panel" class="ytal-help-panel ${isHelpOpen ? "open" : ""}">
-          <div class="ytal-help-row"><kbd>A</kbd> ${t("helpSetA")}</div>
-          <div class="ytal-help-row"><kbd>B</kbd> ${t("helpSetB")}</div>
-          <div class="ytal-help-row"><kbd>L</kbd> ${t("helpLoop")}</div>
-          <div class="ytal-help-row"><kbd>Shift + L</kbd> ${t("helpPlaylistLoop")}</div>
-          <div class="ytal-help-row"><kbd>S</kbd> ${t("helpSave")}</div>
-          <div class="ytal-help-row"><kbd>R</kbd> ${t("helpReset")}</div>
-          <div class="ytal-help-row"><kbd>1-9</kbd> ${t("helpLoad")}</div>
-          <div class="ytal-help-row"><kbd>+ / -</kbd> ${t("helpSpeed")}</div>
-          <div class="ytal-help-row"><kbd>Del</kbd> ${t("helpDelete")}</div>
-          <div class="ytal-help-row"><kbd>Esc</kbd> ${t("helpStop")}</div>
-          <div class="ytal-help-row"><kbd>Alt + = / -</kbd> ${t("helpZoom")}</div>
-          <div class="ytal-help-row"><kbd>Alt + Arrow</kbd> ${t("helpPan")}</div>
-          <div class="ytal-help-row"><kbd>Alt + 0</kbd> ${t("helpZoomReset")}</div>
+          ${getHelpPanelMarkup()}
         </div>
 
         <div class="ytal-copyright">© 2026 JinHyeWon</div>
@@ -2464,34 +2585,34 @@
     window.addEventListener(
       "keydown",
       async (e) => {
-        if (isTypingTarget(e.target)) return;
+        if (shouldIgnoreKeyboardShortcut(e)) return;
 
         const video = getVideo();
         if (!video) return;
 
         const code = e.code;
 
-        if (code === "KeyA") {
+        if (matchesShortcut(e, "setPointA")) {
           e.preventDefault();
           e.stopPropagation();
           setPointAToCurrent({ showToastOnSet: true });
-        } else if (code === "KeyB") {
+        } else if (matchesShortcut(e, "setPointB")) {
           e.preventDefault();
           e.stopPropagation();
           setPointBToCurrent({ showToastOnSet: true });
-        } else if (code === "KeyL" && e.shiftKey) {
+        } else if (matchesShortcut(e, "loop", { shift: true })) {
           e.preventDefault();
           e.stopPropagation();
           await togglePlaylistLoop();
-        } else if (code === "KeyL") {
+        } else if (matchesShortcut(e, "loop")) {
           e.preventDefault();
           e.stopPropagation();
           toggleLoop({ showToastOnChange: true });
-        } else if (code === "KeyS") {
+        } else if (matchesShortcut(e, "save")) {
           e.preventDefault();
           e.stopPropagation();
           saveSegment({ showToastOnSave: true });
-        } else if (code === "KeyR") {
+        } else if (matchesShortcut(e, "reset")) {
           e.preventDefault();
           e.stopPropagation();
           clearCurrentSelection();
@@ -2705,7 +2826,7 @@
     updateUI();
     startWatcher();
     trackCurrentPageView();
-    showToast(t("toastShortcutsIntro"));
+    showToast(getShortcutToastText());
   }
 
   function trackCurrentPageView() {
@@ -2742,6 +2863,13 @@
     });
   }
 
+  function bindStorageEvents() {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== "local" || !changes[STORAGE_UI_KEY]) return;
+      handleUiStoreChange(changes[STORAGE_UI_KEY].newValue || {});
+    });
+  }
+
   function waitForVideoAndInit() {
     if (!isWatchPage()) return;
 
@@ -2763,6 +2891,7 @@
   }
 
   bindKeyboard();
+  bindStorageEvents();
   bindWindowEvents();
   watchUrlChange();
   waitForVideoAndInit();
