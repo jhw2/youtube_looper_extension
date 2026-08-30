@@ -34,6 +34,7 @@ const texts = {
   ko: {
     openYoutube: "YouTube에서 시작하기",
     openWeb: "웹 버전 열기",
+    syncNote: "구글 계정으로 기기 간 자동 동기화",
     shortcutLabel: "단축키 설정",
     shortcutDesc: "원하는 알파벳을 선택하면 바로 저장돼요.",
     shortcutLoopAll: (shortcut) => `구간 전체 반복: Shift + ${shortcut}`,
@@ -53,6 +54,7 @@ const texts = {
   en: {
     openYoutube: "Start on YouTube",
     openWeb: "Open Web Version",
+    syncNote: "Syncs across devices via Google account",
     shortcutLabel: "Shortcut Setup",
     shortcutDesc: "Pick the letter you want and it saves right away.",
     shortcutLoopAll: (shortcut) => `Loop all segments: Shift + ${shortcut}`,
@@ -82,7 +84,7 @@ function detectDefaultLang() {
 
 function getUiStore() {
   return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_UI_KEY], (result) => {
+    chrome.storage.sync.get([STORAGE_UI_KEY], (result) => {
       resolve(result[STORAGE_UI_KEY] || {});
     });
   });
@@ -90,7 +92,7 @@ function getUiStore() {
 
 function setUiStore(store) {
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [STORAGE_UI_KEY]: store }, resolve);
+    chrome.storage.sync.set({ [STORAGE_UI_KEY]: store }, resolve);
   });
 }
 
@@ -226,6 +228,7 @@ function renderStaticText() {
 
   document.getElementById("open-youtube").textContent = uiText.openYoutube;
   document.getElementById("open-web").textContent = uiText.openWeb;
+  document.getElementById("popup-sync-note").textContent = uiText.syncNote;
   document.getElementById("popup-shortcut-label").textContent = uiText.shortcutLabel;
   document.getElementById("popup-shortcut-desc").textContent = uiText.shortcutDesc;
 }

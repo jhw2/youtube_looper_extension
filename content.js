@@ -4,7 +4,9 @@
 
   const STORAGE_SEGMENTS_KEY = "yt-ab-looper-segments";
   const STORAGE_UI_KEY = "yt-ab-looper-ui";
+  const STORAGE_SEG_PREFIX = "yt-ab-seg-";
   const LOOP_INTERVAL_MS = 120;
+  const LOOP_END_BUFFER_MIN_SECONDS = 0.18;
   const MIN_GAP = 0.1;
   const PLAYBACK_RATE_STEP = 0.05;
   const PANEL_TRANSITION_MS = 260;
@@ -13,6 +15,7 @@
   const VIDEO_ZOOM_MIN = 1;
   const VIDEO_ZOOM_MAX = 3;
   const VIDEO_PAN_STEP = 6;
+  const COUNTDOWN_OPTIONS = Object.freeze(["off", "1", "2", "3"]);
   const DEFAULT_SHORTCUTS = Object.freeze({
     setPointA: "A",
     setPointB: "B",
@@ -37,9 +40,11 @@
   let isPlaylistAdvancing = false;
   let draggedSegmentId = null;
   let intervalId = null;
+  let boundVideoEl = null;
   let currentVideoId = null;
   let defaultPlaybackRate = 1;
   let restorePlaybackRate = null;
+  let editingSegmentId = null;
   let transientStatus = "";
   let transientStatusTone = "neutral";
   let transientStatusTimer = null;
@@ -47,6 +52,11 @@
   let toastTone = "neutral";
   let toastTimer = null;
   let fullscreenPeekTimer = null;
+  let countdownMode = "off";
+  let countdownRunId = 0;
+  let isCountdownActive = false;
+  let countdownOverlayMessage = "";
+  let isLoopRestartPending = false;
 
   let isCollapsed = false;
   let isHelpOpen = false;
@@ -59,6 +69,7 @@
 
   let rootEl = null;
   let toastEl = null;
+  let countdownOverlayEl = null;
   let inlineLauncherEl = null;
   let zoomLauncherEl = null;
   let zoomPopupEl = null;
@@ -123,6 +134,16 @@
       zoomToggle: "Zoom",
       zoomHide: "Zoom 닫기",
       zoomLabel: "영상 확대",
+      zoomViewportLabel: "현재 보는 위치",
+      zoomViewportEmpty: "확대하면 전체 프레임 안에서 보고 있는 위치가 여기 표시됩니다.",
+      zoomViewportHint: "전체 프레임 기준",
+      zoomViewportZoom: (value) => `${Math.round(value * 100)}% 확대`,
+      zoomViewportGuide: "미니맵을 클릭하거나 드래그해서 위치 이동",
+      countdownLabel: "Count",
+      countdownOff: "Off",
+      countdownSeconds: (value) => `${value}s`,
+      countdownStartingIn: (value) => `${value} 후 시작`,
+      countdownStartingNow: "시작",
       zoomIn: "확대",
       zoomOut: "축소",
       zoomReset: "초기화",
@@ -137,19 +158,23 @@
       emptyGuide: "재생바의 A·B 마커를 드래그하거나 키보드 A·B 키로 구간을 설정한 뒤 루프나 저장을 사용해 보세요.",
       delete: "삭제",
       editTitle: "이름 수정",
+      editTitlePlaceholder: "구간 이름",
+      toastSetAB: "A와 B를 먼저 올바르게 설정해 주세요.",
+      toastSetA: "먼저 A 지점을 설정해 주세요.",
+      toastNoSegment: "저장할 수 있는 A-B 구간이 없습니다.",
+      toastNoActive: "삭제할 활성 구간이 없습니다.",
+      toastNoActiveSaved: "현재 활성화된 저장 구간이 없습니다.",
+      toastEmptyName: "이름은 비워둘 수 없습니다.",
+      toastTitleUpdated: "구간 이름을 바꿨어요.",
       speedDown: "배속 낮추기",
       speedUp: "배속 높이기",
+      speedInput: "배속 직접 입력",
       reorder: "순서 바꾸기",
       speedValue: (value) => `${value}x`,
       segmentDefault: (n) => `구간${n}`,
       toastSegmentsReordered: "저장한 구간 순서를 바꿨어요.",
-      alertSetAB: "A와 B를 먼저 올바르게 설정해 주세요.",
-      alertSetA: "먼저 A 지점을 설정해 주세요.",
-      alertNoSegment: "저장할 수 있는 A-B 구간이 없습니다.",
-      alertNoActive: "삭제할 활성 구간이 없습니다.",
-      alertNoActiveSaved: "현재 활성화된 저장 구간이 없습니다.",
-      alertEmptyName: "이름은 비워둘 수 없습니다.",
-      promptRename: "구간 이름 수정",
+      toastSpeedInvalid: "배속은 0.05에서 16 사이 숫자로 입력해 주세요.",
+      toastSpeedUpdated: (value) => `배속을 ${value}x로 바꿨어요.`,
       helpSetA: "A 지점 설정",
       helpSetB: "B 지점 설정",
       helpLoop: "구간 반복 켜기/끄기",
@@ -225,6 +250,16 @@
       zoomToggle: "Zoom",
       zoomHide: "Hide Zoom",
       zoomLabel: "Video Zoom",
+      zoomViewportLabel: "Current View",
+      zoomViewportEmpty: "When zoomed in, this shows where you are inside the full frame.",
+      zoomViewportHint: "Full-frame reference",
+      zoomViewportZoom: (value) => `${Math.round(value * 100)}% zoom`,
+      zoomViewportGuide: "Click or drag the minimap to move the view",
+      countdownLabel: "Count",
+      countdownOff: "Off",
+      countdownSeconds: (value) => `${value}s`,
+      countdownStartingIn: (value) => `Starting in ${value}`,
+      countdownStartingNow: "Start",
       zoomIn: "Zoom In",
       zoomOut: "Zoom Out",
       zoomReset: "Reset",
@@ -239,19 +274,23 @@
       emptyGuide: "Drag the A·B markers on the timeline, or use the A and B keys, to set your range, then use Loop or Save.",
       delete: "Delete",
       editTitle: "Edit name",
+      editTitlePlaceholder: "Segment name",
+      toastSetAB: "Please set A and B points first.",
+      toastSetA: "Please set point A first.",
+      toastNoSegment: "No A-B segment to save.",
+      toastNoActive: "No active segment to delete.",
+      toastNoActiveSaved: "No active saved segment.",
+      toastEmptyName: "Name cannot be empty.",
+      toastTitleUpdated: "Segment name updated.",
       speedDown: "Decrease speed",
       speedUp: "Increase speed",
+      speedInput: "Type playback speed",
       reorder: "Reorder",
       speedValue: (value) => `${value}x`,
       segmentDefault: (n) => `Segment ${n}`,
       toastSegmentsReordered: "Saved segments reordered.",
-      alertSetAB: "Please set A and B points first.",
-      alertSetA: "Please set point A first.",
-      alertNoSegment: "No A-B segment to save.",
-      alertNoActive: "No active segment to delete.",
-      alertNoActiveSaved: "No active saved segment.",
-      alertEmptyName: "Name cannot be empty.",
-      promptRename: "Edit segment name",
+      toastSpeedInvalid: "Enter a playback rate between 0.05 and 16.",
+      toastSpeedUpdated: (value) => `Playback speed set to ${value}x.`,
       helpSetA: "Set A point",
       helpSetB: "Set B point",
       helpLoop: "Toggle range loop",
@@ -493,6 +532,82 @@
     }
   }
 
+  function isAdShowing() {
+    const player = document.querySelector("#movie_player");
+    if (player?.classList.contains("ad-showing")) {
+      return true;
+    }
+
+    return Boolean(
+      document.querySelector(
+        [
+          ".video-ads.ytp-ad-module",
+          ".ytp-ad-player-overlay",
+          ".ytp-ad-preview-container",
+          ".ytp-ad-text",
+        ].join(", ")
+      )
+    );
+  }
+
+  function getLoopEndBuffer(video) {
+    const playbackRate = normalizePlaybackRate(video?.playbackRate ?? 1);
+    return Math.max(LOOP_INTERVAL_MS / 1000, LOOP_END_BUFFER_MIN_SECONDS) * Math.max(playbackRate, 1);
+  }
+
+  function shouldTriggerLoopBoundary(video) {
+    if (
+      !video ||
+      typeof pointA !== "number" ||
+      typeof pointB !== "number" ||
+      pointB <= pointA
+    ) {
+      return false;
+    }
+
+    const loopEndBuffer = Math.min(getLoopEndBuffer(video), Math.max((pointB - pointA) / 2, MIN_GAP));
+    return video.currentTime + loopEndBuffer >= pointB;
+  }
+
+  function handleLoopBoundary(video) {
+    if (isCountdownActive || isLoopRestartPending) return false;
+    if (isAdShowing()) return false;
+    if (!shouldTriggerLoopBoundary(video)) return false;
+
+    if (isPlaylistLooping) {
+      advancePlaylistLoop();
+      return true;
+    }
+
+    if (isLooping) {
+      restartLoopWithCountdown(video);
+      return true;
+    }
+
+    return false;
+  }
+
+  function handleVideoEnded() {
+    const video = getVideo();
+    if (!video) return;
+    handleLoopBoundary(video);
+  }
+
+  function bindVideoLoopEvents() {
+    const video = getVideo();
+    if (boundVideoEl === video) return;
+
+    if (boundVideoEl) {
+      boundVideoEl.removeEventListener("ended", handleVideoEnded);
+    }
+
+    boundVideoEl = video;
+
+    if (boundVideoEl) {
+      boundVideoEl.addEventListener("ended", handleVideoEnded);
+    }
+  }
+
   function format(seconds) {
     if (typeof seconds !== "number" || Number.isNaN(seconds)) return "-";
     const m = Math.floor(seconds / 60);
@@ -537,11 +652,30 @@
   function normalizePlaybackRate(value) {
     const rate = Number(value);
     if (!Number.isFinite(rate)) return 1;
-    return Math.min(16, Math.max(0.05, Math.round(rate / PLAYBACK_RATE_STEP) * PLAYBACK_RATE_STEP));
+    return Math.min(16, Math.max(0.05, Math.round(rate * 100) / 100));
   }
 
   function getPlaybackRateLabel(value) {
     return t("speedValue")(normalizePlaybackRate(value).toFixed(2).replace(/\.?0+$/, ""));
+  }
+
+  function formatEditablePlaybackRate(value) {
+    return normalizePlaybackRate(value).toFixed(2);
+  }
+
+  function parsePlaybackRateInput(value) {
+    const trimmed = String(value ?? "")
+      .trim()
+      .replace(/x$/i, "");
+    if (!trimmed) return null;
+    if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed)) return null;
+
+    const rate = Number(trimmed);
+    if (!Number.isFinite(rate) || rate < 0.05 || rate > 16) {
+      return null;
+    }
+
+    return normalizePlaybackRate(rate);
   }
 
   function normalizeVideoZoom(value) {
@@ -565,8 +699,138 @@
     return Math.min(limit, Math.max(-limit, Math.round(pan)));
   }
 
-  function getVideoZoomLabel() {
-    return t("zoomValue")(videoZoom);
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function getZoomViewportSnapshot(video) {
+    if (!video) {
+      return null;
+    }
+
+    const aspectWidth = Math.max(video.videoWidth || 16, 1);
+    const aspectHeight = Math.max(video.videoHeight || 9, 1);
+    const viewportWidth = clamp(1 / videoZoom, 0, 1);
+    const viewportHeight = clamp(1 / videoZoom, 0, 1);
+    const panLimit = getVideoPanLimit(videoZoom);
+
+    if (videoZoom <= 1 || panLimit <= 0) {
+      return {
+        aspectWidth,
+        aspectHeight,
+        left: 0,
+        top: 0,
+        width: 1,
+        height: 1,
+      };
+    }
+
+    const maxCenterOffset = (1 - viewportWidth) / 2;
+    const centerX = 0.5 - (videoPanX / panLimit) * maxCenterOffset;
+    const centerY = 0.5 - (videoPanY / panLimit) * maxCenterOffset;
+    const left = clamp(centerX - viewportWidth / 2, 0, 1 - viewportWidth);
+    const top = clamp(centerY - viewportHeight / 2, 0, 1 - viewportHeight);
+
+    return {
+      aspectWidth,
+      aspectHeight,
+      left,
+      top,
+      width: viewportWidth,
+      height: viewportHeight,
+    };
+  }
+
+  function setVideoPanFromViewportCenter(centerX, centerY) {
+    if (videoZoom <= 1) {
+      videoPanX = 0;
+      videoPanY = 0;
+      return;
+    }
+
+    const panLimit = getVideoPanLimit(videoZoom);
+    const viewportWidth = clamp(1 / videoZoom, 0, 1);
+    const viewportHeight = clamp(1 / videoZoom, 0, 1);
+    const maxCenterOffsetX = (1 - viewportWidth) / 2;
+    const maxCenterOffsetY = (1 - viewportHeight) / 2;
+
+    if (panLimit <= 0 || maxCenterOffsetX <= 0 || maxCenterOffsetY <= 0) {
+      videoPanX = 0;
+      videoPanY = 0;
+      return;
+    }
+
+    const boundedCenterX = clamp(centerX, viewportWidth / 2, 1 - viewportWidth / 2);
+    const boundedCenterY = clamp(centerY, viewportHeight / 2, 1 - viewportHeight / 2);
+
+    videoPanX = normalizeVideoPan(
+      ((0.5 - boundedCenterX) / maxCenterOffsetX) * panLimit,
+      videoZoom
+    );
+    videoPanY = normalizeVideoPan(
+      ((0.5 - boundedCenterY) / maxCenterOffsetY) * panLimit,
+      videoZoom
+    );
+  }
+
+  async function persistZoomViewport() {
+    trackAnalyticsEvent("zoom_panned", getZoomAnalyticsParams({
+      source: "minimap",
+    }));
+    await saveUiState();
+  }
+
+  function setZoomControlButtonMarkup(button, icon, label) {
+    if (!button) return;
+    button.innerHTML = `
+      <span class="ytal-zoom-chip-icon" aria-hidden="true">${icon}</span>
+      <span class="ytal-zoom-chip-label">${label}</span>
+    `;
+  }
+
+  function bindZoomViewportInteractions(frameEl) {
+    if (!frameEl || frameEl.dataset.bound === "true") return;
+    frameEl.dataset.bound = "true";
+
+    let isDragging = false;
+
+    const moveViewportFromPointer = (event) => {
+      const rect = frameEl.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const ratioX = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+      const ratioY = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+      setVideoPanFromViewportCenter(ratioX, ratioY);
+      applyVideoZoom();
+      updateUI();
+    };
+
+    frameEl.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) return;
+      if (videoZoom <= 1) return;
+
+      isDragging = true;
+      frameEl.classList.add("dragging");
+      moveViewportFromPointer(event);
+      event.preventDefault();
+
+      const handlePointerMove = (moveEvent) => {
+        if (!isDragging) return;
+        moveViewportFromPointer(moveEvent);
+      };
+
+      const handlePointerUp = async () => {
+        if (!isDragging) return;
+        isDragging = false;
+        frameEl.classList.remove("dragging");
+        document.removeEventListener("mousemove", handlePointerMove);
+        document.removeEventListener("mouseup", handlePointerUp);
+        await persistZoomViewport();
+      };
+
+      document.addEventListener("mousemove", handlePointerMove);
+      document.addEventListener("mouseup", handlePointerUp, { once: true });
+    });
   }
 
   function getZoomAnalyticsParams(extra = {}) {
@@ -623,6 +887,39 @@
 
     await renderSegments();
     updateUI();
+  }
+
+  async function updateSegmentPlaybackRate(id, nextRate) {
+    const segments = await getCurrentVideoSegments();
+    const index = segments.findIndex((segment) => segment.id === id);
+    if (index === -1) return "missing";
+
+    const currentRate = getSegmentPlaybackRate(segments[index]);
+    const normalizedRate = normalizePlaybackRate(nextRate);
+    if (normalizedRate === currentRate) {
+      return "unchanged";
+    }
+
+    segments[index] = {
+      ...segments[index],
+      playbackRate: normalizedRate,
+    };
+
+    await saveCurrentVideoSegments(segments);
+
+    const isActive =
+      typeof pointA === "number" &&
+      typeof pointB === "number" &&
+      pointA === segments[index].start &&
+      pointB === segments[index].end;
+
+    if (isActive) {
+      applyPlaybackRate(segments[index].playbackRate);
+    }
+
+    await renderSegments();
+    updateUI();
+    return "updated";
   }
 
   async function setActiveSegmentPlaybackRate(direction) {
@@ -702,33 +999,84 @@
       .replaceAll("'", "&#039;");
   }
 
+  function normalizeCountdownMode(value) {
+    const next = String(value ?? "off");
+    return COUNTDOWN_OPTIONS.includes(next) ? next : "off";
+  }
+
+  function getCountdownOptionLabel(value) {
+    const mode = normalizeCountdownMode(value);
+    return mode === "off" ? t("countdownOff") : t("countdownSeconds")(mode);
+  }
+
   // ── Storage ──
-  function getSegmentsStore() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get([STORAGE_SEGMENTS_KEY], (result) => {
-        resolve(result[STORAGE_SEGMENTS_KEY] || {});
-      });
-    });
-  }
-
-  function setSegmentsStore(store) {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ [STORAGE_SEGMENTS_KEY]: store }, resolve);
-    });
-  }
-
   function getUiStore() {
     return new Promise((resolve) => {
-      chrome.storage.local.get([STORAGE_UI_KEY], (result) => {
+      chrome.storage.sync.get([STORAGE_UI_KEY], (result) => {
         resolve(result[STORAGE_UI_KEY] || {});
       });
     });
   }
 
   function setUiStore(store) {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ [STORAGE_UI_KEY]: store }, resolve);
+    return new Promise((resolve, reject) => {
+      chrome.storage.sync.set({ [STORAGE_UI_KEY]: store }, () => {
+        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+        else resolve();
+      });
     });
+  }
+
+  async function migrateFromLocalStorage() {
+    const local = await new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_SEGMENTS_KEY, STORAGE_UI_KEY], resolve);
+    });
+
+    const keysToRemove = [];
+
+    if (local[STORAGE_UI_KEY]) {
+      const syncUi = await getUiStore();
+      if (!Object.keys(syncUi).length) {
+        try {
+          await setUiStore(local[STORAGE_UI_KEY]);
+        } catch {
+          // ignore quota errors during migration
+        }
+      }
+      keysToRemove.push(STORAGE_UI_KEY);
+    }
+
+    const segmentsStore = local[STORAGE_SEGMENTS_KEY];
+    if (segmentsStore && typeof segmentsStore === "object") {
+      let allMigrated = true;
+      for (const [videoId, segments] of Object.entries(segmentsStore)) {
+        if (!Array.isArray(segments) || segments.length === 0) continue;
+        const syncKey = STORAGE_SEG_PREFIX + videoId;
+        const existing = await new Promise((resolve) =>
+          chrome.storage.sync.get([syncKey], (result) => resolve(result[syncKey]))
+        );
+        if (!existing?.length) {
+          try {
+            await new Promise((resolve, reject) =>
+              chrome.storage.sync.set({ [syncKey]: segments.map(serializeSegment) }, () => {
+                if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+                else resolve();
+              })
+            );
+          } catch {
+            // quota exceeded — leave this video in local storage
+            allMigrated = false;
+          }
+        }
+      }
+      if (allMigrated) {
+        keysToRemove.push(STORAGE_SEGMENTS_KEY);
+      }
+    }
+
+    if (keysToRemove.length) {
+      await new Promise((resolve) => chrome.storage.local.remove(keysToRemove, resolve));
+    }
   }
 
   async function saveUiState() {
@@ -740,6 +1088,7 @@
     store.videoZoom = videoZoom;
     store.videoPanX = videoPanX;
     store.videoPanY = videoPanY;
+    store.countdownMode = countdownMode;
     await setUiStore(store);
   }
 
@@ -755,6 +1104,7 @@
     videoZoom = normalizeVideoZoom(store.videoZoom);
     videoPanX = normalizeVideoPan(store.videoPanX, videoZoom);
     videoPanY = normalizeVideoPan(store.videoPanY, videoZoom);
+    countdownMode = normalizeCountdownMode(store.countdownMode);
     shortcuts = sanitizeShortcutConfig(store.shortcuts);
   }
 
@@ -840,23 +1190,83 @@
     await saveUiState();
   }
 
+  function generateSegmentId() {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  function serializeSegment(seg) {
+    const compact = {
+      i: seg.id,
+      t: seg.title,
+      s: Math.round((seg.start ?? 0) * 10) / 10,
+      e: Math.round((seg.end ?? 0) * 10) / 10,
+    };
+    const rate = normalizePlaybackRate(seg.playbackRate ?? 1);
+    if (rate !== 1) compact.r = rate;
+    return compact;
+  }
+
+  function deserializeSegment(data) {
+    return {
+      id: data.i ?? data.id ?? generateSegmentId(),
+      title: data.t ?? data.title ?? "",
+      start: data.s ?? data.start ?? 0,
+      end: data.e ?? data.end ?? 0,
+      playbackRate: normalizePlaybackRate(data.r ?? data.playbackRate ?? 1),
+    };
+  }
+
   async function getCurrentVideoSegments() {
     const videoId = getVideoId();
     if (!videoId) return [];
-    const store = await getSegmentsStore();
-    return Array.isArray(store[videoId]) ? store[videoId] : [];
+    return new Promise((resolve) => {
+      chrome.storage.sync.get([STORAGE_SEG_PREFIX + videoId], (result) => {
+        const raw = result[STORAGE_SEG_PREFIX + videoId];
+        resolve(Array.isArray(raw) ? raw.map(deserializeSegment) : []);
+      });
+    });
   }
 
   async function saveCurrentVideoSegments(segments) {
     const videoId = getVideoId();
     if (!videoId) return;
-    const store = await getSegmentsStore();
-    store[videoId] = segments;
-    await setSegmentsStore(store);
+    const compact = segments.map(serializeSegment);
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.storage.sync.set({ [STORAGE_SEG_PREFIX + videoId]: compact }, () => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve();
+        });
+      });
+    } catch {
+      // Sync quota exceeded — persist locally so data isn't lost
+      const store = await new Promise((resolve) =>
+        chrome.storage.local.get([STORAGE_SEGMENTS_KEY], (result) =>
+          resolve(result[STORAGE_SEGMENTS_KEY] || {})
+        )
+      );
+      store[videoId] = compact;
+      await new Promise((resolve) =>
+        chrome.storage.local.set({ [STORAGE_SEGMENTS_KEY]: store }, resolve)
+      );
+      showToast(
+        lang === "ko"
+          ? "동기화 용량이 꽉 찼습니다. 이 기기에만 저장됩니다."
+          : "Sync quota exceeded. Saved locally only.",
+        "neutral",
+        4000
+      );
+    }
   }
 
   // ── Loop Control ──
   function stopLoop() {
+    countdownRunId += 1;
+    isCountdownActive = false;
+    countdownOverlayMessage = "";
+    isLoopRestartPending = false;
     isLooping = false;
     updateUI();
   }
@@ -864,6 +1274,9 @@
   function stopPlaylistLoop(options = {}) {
     const { showToastOnChange = false } = options;
     if (!isPlaylistLooping) return;
+    countdownRunId += 1;
+    isCountdownActive = false;
+    countdownOverlayMessage = "";
     isPlaylistLooping = false;
     isPlaylistAdvancing = false;
     if (showToastOnChange) {
@@ -890,6 +1303,58 @@
     stopLoop();
   }
 
+  function showCountdownOverlay(message) {
+    countdownOverlayMessage = message;
+    updateUI();
+  }
+
+  async function runLoopCountdownIfNeeded() {
+    const seconds = Number(normalizeCountdownMode(countdownMode));
+    if (!seconds) return true;
+
+    const video = getVideo();
+    const runId = ++countdownRunId;
+    isCountdownActive = true;
+    showCountdownOverlay("");
+    updateUI();
+    video?.pause();
+
+    for (let value = seconds; value >= 1; value -= 1) {
+      showCountdownOverlay(t("countdownStartingIn")(getCountdownOptionLabel(String(value))));
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      if (runId !== countdownRunId) {
+        isCountdownActive = false;
+        countdownOverlayMessage = "";
+        updateUI();
+        return false;
+      }
+    }
+
+    showCountdownOverlay(t("countdownStartingNow"));
+    await new Promise((resolve) => window.setTimeout(resolve, 350));
+    isCountdownActive = false;
+    countdownOverlayMessage = "";
+    updateUI();
+    return runId === countdownRunId;
+  }
+
+  async function restartLoopWithCountdown(video) {
+    if (isLoopRestartPending) return;
+    isLoopRestartPending = true;
+
+    try {
+      if (video) {
+        video.pause();
+        video.currentTime = pointA;
+      }
+      const canStart = await runLoopCountdownIfNeeded();
+      if (!canStart || !isLooping) return;
+      video?.play().catch(() => {});
+    } finally {
+      isLoopRestartPending = false;
+    }
+  }
+
   async function updateSegmentRange(id, startRawValue, endRawValue) {
     const nextStart = parseTimeInput(startRawValue);
     const nextEnd = parseTimeInput(endRawValue);
@@ -909,8 +1374,8 @@
         ? video.duration
         : Number.POSITIVE_INFINITY;
 
-    const clampedStart = Math.max(0, Math.min(nextStart, duration));
-    const clampedEnd = Math.min(duration, Math.max(nextEnd, clampedStart + MIN_GAP));
+    const clampedStart = Math.round(Math.max(0, Math.min(nextStart, duration)) * 10) / 10;
+    const clampedEnd = Math.round(Math.min(duration, Math.max(nextEnd, clampedStart + MIN_GAP)) * 10) / 10;
     const didChange =
       clampedStart !== segments[index].start ||
       clampedEnd !== segments[index].end;
@@ -951,14 +1416,14 @@
     video.currentTime = next;
   }
 
-  function toggleLoop(options = {}) {
+  async function toggleLoop(options = {}) {
     const { showToastOnChange = false } = options;
     if (
       typeof pointA !== "number" ||
       typeof pointB !== "number" ||
       pointB <= pointA
     ) {
-      alert(t("alertSetAB"));
+      showToast(t("toastSetAB"), "neutral");
       return;
     }
 
@@ -971,8 +1436,14 @@
 
     if (isLooping) {
       const video = getVideo();
-      if (video && video.currentTime < pointA) {
+      if (video) {
         video.currentTime = pointA;
+      }
+      const canStart = await runLoopCountdownIfNeeded();
+      if (!canStart) {
+        isLooping = false;
+        updateUI();
+        return;
       }
       if (video) {
         video.play().catch(() => {});
@@ -1029,7 +1500,7 @@
     const video = getVideo();
     if (!video) return;
     if (typeof pointA !== "number") {
-      alert(t("alertSetA"));
+      showToast(t("toastSetA"), "neutral");
       return;
     }
 
@@ -1059,9 +1530,13 @@
       typeof pointB !== "number" ||
       pointB <= pointA
     ) {
-      alert(t("alertNoSegment"));
+      showToast(t("toastNoSegment"), "neutral");
       return;
     }
+
+    // Round to storage precision (0.1s) so isSegmentActive and duplicate checks stay consistent
+    pointA = Math.round(pointA * 10) / 10;
+    pointB = Math.round(pointB * 10) / 10;
 
     const segments = await getCurrentVideoSegments();
     const existingIndex = segments.findIndex(
@@ -1086,7 +1561,7 @@
     const shortcut = segments.length < 9 ? String(segments.length + 1) : null;
 
     const segment = {
-      id: crypto.randomUUID(),
+      id: generateSegmentId(),
       title,
       start: pointA,
       end: pointB,
@@ -1175,7 +1650,7 @@
       typeof pointB !== "number" ||
       pointB <= pointA
     ) {
-      alert(t("alertNoActive"));
+      showToast(t("toastNoActive"), "neutral");
       return;
     }
 
@@ -1184,27 +1659,28 @@
     );
 
     if (!activeSegment) {
-      alert(t("alertNoActiveSaved"));
+      showToast(t("toastNoActiveSaved"), "neutral");
       return;
     }
 
     await deleteSegment(activeSegment.id);
   }
 
-  async function editSegmentTitle(id, currentTitle = "") {
-    const nextTitle = prompt(t("promptRename"), currentTitle);
-
-    if (nextTitle === null) return;
-
+  async function updateSegmentTitle(id, nextTitle, options = {}) {
+    const { showToastOnSave = false } = options;
     const trimmed = nextTitle.trim();
     if (!trimmed) {
-      alert(t("alertEmptyName"));
-      return;
+      showToast(t("toastEmptyName"), "neutral");
+      return "invalid";
     }
 
     const segments = await getCurrentVideoSegments();
     const index = segments.findIndex((segment) => segment.id === id);
-    if (index === -1) return;
+    if (index === -1) return "missing";
+
+    if (segments[index].title === trimmed) {
+      return "unchanged";
+    }
 
     segments[index] = {
       ...segments[index],
@@ -1217,6 +1693,10 @@
     }
     await renderSegments();
     updateUI();
+    if (showToastOnSave) {
+      showToast(t("toastTitleUpdated"), "success", 1600);
+    }
+    return "updated";
   }
 
   function activateSegment(segment, options = {}) {
@@ -1259,6 +1739,10 @@
     }
 
     stopLoop();
+    const canStart = await runLoopCountdownIfNeeded();
+    if (!canStart) {
+      return;
+    }
     isPlaylistLooping = true;
     activateSegment(segments[0], { fromPlaylist: true });
     showToast(t("toastPlaylistLoopOn"), "success");
@@ -1380,9 +1864,19 @@
       mainBtn.innerHTML = `
         <div class="ytal-item-title-row">
           <div class="ytal-item-title-group">
-            <div class="ytal-item-title">${index + 1}. ${escapeHtml(segment.title)}</div>
+            <label class="ytal-item-title-label">
+              <span class="ytal-item-title-index">${index + 1}.</span>
+              <input
+                class="ytal-item-title-input"
+                type="text"
+                value="${escapeHtml(segment.title)}"
+                aria-label="${escapeHtml(t("editTitle"))}"
+                placeholder="${escapeHtml(t("editTitlePlaceholder"))}"
+                data-segment-id="${segment.id}"
+              >
+              <span class="ytal-item-title-edit-indicator" aria-hidden="true">✎</span>
+            </label>
           </div>
-          <button class="ytal-edit-btn" type="button" title="${t("editTitle")}" aria-label="${t("editTitle")}">✎</button>
         </div>
         <div class="ytal-item-meta">
           <div class="ytal-item-time-editor">
@@ -1392,7 +1886,16 @@
           </div>
           <div class="ytal-speed-chip" role="group" aria-label="${t("speedValue")(getSegmentPlaybackRate(segment))}">
             <button class="ytal-speed-chip-btn" type="button" title="${t("speedDown")}" aria-label="${t("speedDown")}">-</button>
-            <span class="ytal-speed-chip-value">${getPlaybackRateLabel(getSegmentPlaybackRate(segment))}</span>
+            <input
+              class="ytal-speed-chip-input"
+              type="number"
+              min="0.05"
+              max="16"
+              step="0.1"
+              aria-label="${escapeHtml(t("speedInput"))}"
+              value="${escapeHtml(formatEditablePlaybackRate(getSegmentPlaybackRate(segment)))}"
+            >
+            <span class="ytal-speed-chip-suffix" aria-hidden="true">x</span>
             <button class="ytal-speed-chip-btn" type="button" title="${t("speedUp")}" aria-label="${t("speedUp")}">+</button>
           </div>
         </div>
@@ -1409,12 +1912,57 @@
         }
       });
 
-      const editBtn = mainBtn.querySelector(".ytal-edit-btn");
-      if (editBtn) {
-        editBtn.addEventListener("click", async (e) => {
+      const titleInput = mainBtn.querySelector(".ytal-item-title-input");
+      if (titleInput) {
+        if (editingSegmentId === segment.id) {
+          window.requestAnimationFrame(() => {
+            titleInput.focus();
+            titleInput.select();
+          });
+        }
+
+        const restoreTitle = () => {
+          titleInput.value = segment.title;
+        };
+
+        const commitTitleChange = async () => {
+          const result = await updateSegmentTitle(segment.id, titleInput.value, {
+            showToastOnSave: true,
+          });
+
+          if (result === "invalid" || result === "missing") {
+            editingSegmentId = null;
+            restoreTitle();
+            return;
+          }
+
+          editingSegmentId = null;
+        };
+
+        titleInput.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          await editSegmentTitle(segment.id, segment.title);
+        });
+        titleInput.addEventListener("focus", (e) => {
+          e.stopPropagation();
+          editingSegmentId = segment.id;
+          titleInput.select();
+        });
+        titleInput.addEventListener("keydown", async (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            await commitTitleChange();
+            titleInput.blur();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            restoreTitle();
+            editingSegmentId = null;
+            titleInput.blur();
+          }
+        });
+        titleInput.addEventListener("blur", async () => {
+          await commitTitleChange();
         });
       }
 
@@ -1433,6 +1981,63 @@
           e.preventDefault();
           e.stopPropagation();
           await setSegmentPlaybackRate(segment.id, 1);
+        });
+      }
+
+      const speedInput = mainBtn.querySelector(".ytal-speed-chip-input");
+      if (speedInput) {
+        const currentSegmentRate = () => getSegmentPlaybackRate(segment);
+
+        const restorePlaybackRateInput = () => {
+          speedInput.value = formatEditablePlaybackRate(currentSegmentRate());
+        };
+
+        const commitPlaybackRateChange = async () => {
+          const parsedRate = parsePlaybackRateInput(speedInput.value);
+          if (parsedRate === null) {
+            showToast(t("toastSpeedInvalid"), "neutral");
+            restorePlaybackRateInput();
+            return;
+          }
+
+          const result = await updateSegmentPlaybackRate(segment.id, parsedRate);
+          if (result === "missing") {
+            restorePlaybackRateInput();
+            return;
+          }
+
+          speedInput.value = formatEditablePlaybackRate(parsedRate);
+          if (result === "updated") {
+            showToast(
+              t("toastSpeedUpdated")(formatEditablePlaybackRate(parsedRate)),
+              "success",
+              1600
+            );
+          }
+        };
+
+        speedInput.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+        speedInput.addEventListener("focus", (e) => {
+          e.stopPropagation();
+          speedInput.select();
+        });
+        speedInput.addEventListener("keydown", async (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            await commitPlaybackRateChange();
+            speedInput.blur();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            restorePlaybackRateInput();
+            speedInput.blur();
+          }
+        });
+        speedInput.addEventListener("blur", async () => {
+          await commitPlaybackRateChange();
         });
       }
 
@@ -1536,6 +2141,8 @@
   function updateUI() {
     if (!rootEl) return;
     syncToastMountTarget();
+    syncCountdownMountTarget();
+    updateCountdownOverlayPlacement();
 
     const loopBtn = document.getElementById("ytal-loop-btn");
     const saveBtn = document.getElementById("ytal-save-btn");
@@ -1551,17 +2158,19 @@
     const timelineTrack = document.getElementById("ytal-timeline-track");
     const rangeSummary = document.getElementById("ytal-range-summary");
     const resetBtn = document.getElementById("ytal-reset-selection");
+    const countdownLabel = document.getElementById("ytal-countdown-label");
+    const countdownSelect = document.getElementById("ytal-countdown-select");
     const collapseBtn = document.getElementById("ytal-toggle-collapse");
     const revealBtn = document.getElementById("ytal-reveal-panel");
-    const zoomValue = document.getElementById("ytal-zoom-value");
     const zoomOutBtn = document.getElementById("ytal-zoom-out");
     const zoomInBtn = document.getElementById("ytal-zoom-in");
     const zoomResetBtn = document.getElementById("ytal-zoom-reset");
-    const panUpBtn = document.getElementById("ytal-pan-up");
-    const panDownBtn = document.getElementById("ytal-pan-down");
-    const panLeftBtn = document.getElementById("ytal-pan-left");
-    const panRightBtn = document.getElementById("ytal-pan-right");
-    const panLabel = document.getElementById("ytal-pan-label");
+    const zoomViewportLabel = document.getElementById("ytal-zoom-viewport-label");
+    const zoomViewportMeta = document.getElementById("ytal-zoom-viewport-meta");
+    const zoomViewportHint = document.getElementById("ytal-zoom-viewport-hint");
+    const zoomViewportFrame = document.getElementById("ytal-zoom-viewport-frame");
+    const zoomViewportBox = document.getElementById("ytal-zoom-viewport-box");
+    const zoomViewportGuide = document.getElementById("ytal-zoom-viewport-guide");
     const video = getVideo();
     const duration = video?.duration || 0;
     const currentTime = video?.currentTime || 0;
@@ -1577,6 +2186,7 @@
       pointB > pointA;
     const hasSelection =
       typeof pointA === "number" || typeof pointB === "number";
+    const zoomViewport = getZoomViewportSnapshot(video);
 
     if (rangeSummary) {
       rangeSummary.textContent = canLoop
@@ -1590,6 +2200,11 @@
       toastEl.textContent = toastMessage;
       toastEl.dataset.tone = toastTone;
       toastEl.classList.toggle("show", !!toastMessage);
+    }
+
+    if (countdownOverlayEl) {
+      countdownOverlayEl.classList.toggle("show", isCountdownActive && !!countdownOverlayMessage);
+      countdownOverlayEl.textContent = isCountdownActive ? countdownOverlayMessage : "";
     }
 
     if (timelineFill) {
@@ -1642,6 +2257,24 @@
       resetBtn.setAttribute("aria-label", t("resetSelection"));
       resetBtn.disabled = !hasSelection;
       resetBtn.classList.toggle("active", hasSelection);
+    }
+
+    if (countdownLabel) {
+      countdownLabel.textContent = t("countdownLabel");
+    }
+
+    if (countdownSelect) {
+      const nextValue = normalizeCountdownMode(countdownMode);
+      if (countdownSelect.value !== nextValue) {
+        countdownSelect.value = nextValue;
+      }
+      Array.from(countdownSelect.options).forEach((option) => {
+        const nextLabel = getCountdownOptionLabel(option.value);
+        if (option.textContent !== nextLabel) {
+          option.textContent = nextLabel;
+        }
+      });
+      countdownSelect.setAttribute("aria-label", t("countdownLabel"));
     }
 
     if (loopBtn) {
@@ -1703,17 +2336,46 @@
       `;
     }
 
-    if (zoomValue) {
-      zoomValue.textContent = getVideoZoomLabel();
+    if (zoomViewportLabel) {
+      zoomViewportLabel.textContent = t("zoomViewportLabel");
+    }
+
+    if (zoomViewportMeta) {
+      zoomViewportMeta.textContent = zoomViewport
+        ? t("zoomViewportZoom")(videoZoom)
+        : t("zoomViewportEmpty");
+    }
+
+    if (zoomViewportHint) {
+      zoomViewportHint.textContent = t("zoomViewportHint");
+    }
+
+    if (zoomViewportGuide) {
+      zoomViewportGuide.textContent = t("zoomViewportGuide");
+    }
+
+    if (zoomViewportFrame && zoomViewport) {
+      zoomViewportFrame.style.aspectRatio = `${zoomViewport.aspectWidth} / ${zoomViewport.aspectHeight}`;
+    }
+
+    if (zoomViewportBox) {
+      const left = (zoomViewport?.left || 0) * 100;
+      const top = (zoomViewport?.top || 0) * 100;
+      const width = (zoomViewport?.width || 1) * 100;
+      const height = (zoomViewport?.height || 1) * 100;
+      zoomViewportBox.style.left = `${left}%`;
+      zoomViewportBox.style.top = `${top}%`;
+      zoomViewportBox.style.width = `${width}%`;
+      zoomViewportBox.style.height = `${height}%`;
     }
 
     if (zoomOutBtn) {
-      zoomOutBtn.textContent = t("zoomOut");
+      setZoomControlButtonMarkup(zoomOutBtn, "−", t("zoomOut"));
       zoomOutBtn.disabled = videoZoom <= VIDEO_ZOOM_MIN;
     }
 
     if (zoomInBtn) {
-      zoomInBtn.textContent = t("zoomIn");
+      setZoomControlButtonMarkup(zoomInBtn, "+", t("zoomIn"));
       zoomInBtn.disabled = videoZoom >= VIDEO_ZOOM_MAX;
     }
 
@@ -1721,32 +2383,6 @@
       zoomResetBtn.textContent = t("zoomReset");
       zoomResetBtn.title = t("zoomResetDesc");
       zoomResetBtn.disabled = videoZoom === 1 && videoPanX === 0 && videoPanY === 0;
-    }
-
-    const canPan = videoZoom > 1;
-
-    if (panUpBtn) {
-      panUpBtn.textContent = t("panUp");
-      panUpBtn.disabled = !canPan;
-    }
-
-    if (panDownBtn) {
-      panDownBtn.textContent = t("panDown");
-      panDownBtn.disabled = !canPan;
-    }
-
-    if (panLeftBtn) {
-      panLeftBtn.textContent = t("panLeft");
-      panLeftBtn.disabled = !canPan;
-    }
-
-    if (panRightBtn) {
-      panRightBtn.textContent = t("panRight");
-      panRightBtn.disabled = !canPan;
-    }
-
-    if (panLabel) {
-      panLabel.textContent = t("zoomPosition");
     }
 
     syncInlineLauncher();
@@ -1848,6 +2484,17 @@
     return toastEl;
   }
 
+  function ensureCountdownOverlay() {
+    if (countdownOverlayEl?.isConnected) return countdownOverlayEl;
+
+    countdownOverlayEl = document.createElement("div");
+    countdownOverlayEl.id = "ytal-countdown-overlay";
+    countdownOverlayEl.className = "ytal-countdown-overlay";
+    countdownOverlayEl.setAttribute("aria-live", "assertive");
+    countdownOverlayEl.setAttribute("aria-atomic", "true");
+    return countdownOverlayEl;
+  }
+
   function ensureInlineLauncher() {
     if (inlineLauncherEl) return inlineLauncherEl;
 
@@ -1889,26 +2536,23 @@
     zoomPopupEl.id = "ytal-zoom-popup";
     zoomPopupEl.className = "ytal-zoom-card";
     zoomPopupEl.innerHTML = `
-      <div class="ytal-section-row ytal-section-row-compact">
-        <div class="ytal-section-label">${t("zoomSection")}</div>
-        <div class="ytal-zoom-value" id="ytal-zoom-value">${getVideoZoomLabel()}</div>
+      <div class="ytal-zoom-viewport-card">
+        <div class="ytal-zoom-viewport-head">
+          <div class="ytal-zoom-viewport-label" id="ytal-zoom-viewport-label">${t("zoomViewportLabel")}</div>
+          <div class="ytal-zoom-viewport-hint" id="ytal-zoom-viewport-hint">${t("zoomViewportHint")}</div>
+        </div>
+        <div class="ytal-zoom-viewport-meta" id="ytal-zoom-viewport-meta">${t("zoomViewportEmpty")}</div>
+        <div class="ytal-zoom-viewport-frame" id="ytal-zoom-viewport-frame" aria-hidden="true">
+          <span class="ytal-zoom-viewport-grid"></span>
+          <span class="ytal-zoom-viewport-center"></span>
+          <span class="ytal-zoom-viewport-box" id="ytal-zoom-viewport-box"></span>
+        </div>
+        <div class="ytal-zoom-viewport-guide" id="ytal-zoom-viewport-guide">${t("zoomViewportGuide")}</div>
       </div>
-      <div class="ytal-zoom-copy">${t("zoomLabel")}</div>
       <div class="ytal-zoom-controls">
-        <button class="ytal-section-chip" id="ytal-zoom-out" type="button">${t("zoomOut")}</button>
-        <button class="ytal-section-chip" id="ytal-zoom-in" type="button">${t("zoomIn")}</button>
-        <button class="ytal-section-chip ytal-section-chip-reset" id="ytal-zoom-reset" type="button" title="${t("zoomResetDesc")}">${t("zoomReset")}</button>
-      </div>
-      <div class="ytal-pan-grid" aria-label="${t("zoomPosition")}">
-        <span></span>
-        <button class="ytal-pan-btn" id="ytal-pan-up" type="button">&#8593; ${t("panUp")}</button>
-        <span></span>
-        <button class="ytal-pan-btn" id="ytal-pan-left" type="button">&#8592; ${t("panLeft")}</button>
-        <div class="ytal-pan-label ytal-pan-btn-center" id="ytal-pan-label">${t("zoomPosition")}</div>
-        <button class="ytal-pan-btn" id="ytal-pan-right" type="button">&#8594; ${t("panRight")}</button>
-        <span></span>
-        <button class="ytal-pan-btn" id="ytal-pan-down" type="button">&#8595; ${t("panDown")}</button>
-        <span></span>
+        <button class="ytal-section-chip ytal-section-chip-out" id="ytal-zoom-out" type="button"></button>
+        <button class="ytal-section-chip ytal-section-chip-in" id="ytal-zoom-in" type="button"></button>
+        <button class="ytal-section-chip ytal-section-chip-reset ytal-section-chip-reset-full" id="ytal-zoom-reset" type="button" title="${t("zoomResetDesc")}">${t("zoomReset")}</button>
       </div>
     `;
     document.body.appendChild(zoomPopupEl);
@@ -1925,21 +2569,7 @@
       .getElementById("ytal-zoom-reset")
       .addEventListener("click", resetVideoZoom);
 
-    document
-      .getElementById("ytal-pan-up")
-      .addEventListener("click", () => nudgeVideoPan("y", VIDEO_PAN_STEP));
-
-    document
-      .getElementById("ytal-pan-down")
-      .addEventListener("click", () => nudgeVideoPan("y", -VIDEO_PAN_STEP));
-
-    document
-      .getElementById("ytal-pan-left")
-      .addEventListener("click", () => nudgeVideoPan("x", VIDEO_PAN_STEP));
-
-    document
-      .getElementById("ytal-pan-right")
-      .addEventListener("click", () => nudgeVideoPan("x", -VIDEO_PAN_STEP));
+    bindZoomViewportInteractions(document.getElementById("ytal-zoom-viewport-frame"));
 
     return zoomPopupEl;
   }
@@ -2063,6 +2693,50 @@
     nextToastEl.classList.toggle("ytal-in-fullscreen", nextMountEl !== document.body);
   }
 
+  function syncCountdownMountTarget() {
+    const nextMountEl = getRootMountTarget();
+    const nextOverlayEl = ensureCountdownOverlay();
+
+    if (!nextMountEl || !nextOverlayEl) return;
+
+    if (nextOverlayEl.parentElement !== nextMountEl) {
+      nextMountEl.appendChild(nextOverlayEl);
+    }
+
+    nextOverlayEl.classList.toggle("ytal-in-fullscreen", nextMountEl !== document.body);
+  }
+
+  function updateCountdownOverlayPlacement() {
+    if (!countdownOverlayEl) return;
+
+    const mountTarget = getRootMountTarget();
+    if (mountTarget !== document.body) {
+      countdownOverlayEl.style.position = "absolute";
+      countdownOverlayEl.style.top = "50%";
+      countdownOverlayEl.style.left = "50%";
+      countdownOverlayEl.style.right = "auto";
+      countdownOverlayEl.style.bottom = "auto";
+      return;
+    }
+
+    const playerEl = getPlayerContainer() || getVideo();
+    const rect = playerEl?.getBoundingClientRect();
+    if (!rect || !rect.width || !rect.height) {
+      countdownOverlayEl.style.position = "fixed";
+      countdownOverlayEl.style.top = "50%";
+      countdownOverlayEl.style.left = "50%";
+      countdownOverlayEl.style.right = "auto";
+      countdownOverlayEl.style.bottom = "auto";
+      return;
+    }
+
+    countdownOverlayEl.style.position = "fixed";
+    countdownOverlayEl.style.top = `${rect.top + rect.height / 2}px`;
+    countdownOverlayEl.style.left = `${rect.left + rect.width / 2}px`;
+    countdownOverlayEl.style.right = "auto";
+    countdownOverlayEl.style.bottom = "auto";
+  }
+
   function syncRootMountTarget() {
     if (!rootEl) return;
 
@@ -2073,6 +2747,7 @@
     rootMountEl = nextMountEl;
     rootEl.classList.toggle("ytal-in-fullscreen", rootMountEl !== document.body);
     syncToastMountTarget();
+    syncCountdownMountTarget();
     schedulePlacementUpdate();
   }
 
@@ -2414,6 +3089,15 @@
       <div class="ytal-body">
         <div class="ytal-timeline-card">
           <div class="ytal-timeline-topbar">
+            <label class="ytal-countdown-control" for="ytal-countdown-select">
+              <span class="ytal-countdown-label" id="ytal-countdown-label">${t("countdownLabel")}</span>
+              <select class="ytal-countdown-select" id="ytal-countdown-select">
+                <option value="off">${t("countdownOff")}</option>
+                <option value="1">${t("countdownSeconds")("1")}</option>
+                <option value="2">${t("countdownSeconds")("2")}</option>
+                <option value="3">${t("countdownSeconds")("3")}</option>
+              </select>
+            </label>
             <button class="ytal-reset-btn" id="ytal-reset-selection" type="button" title="${t("tipReset")(formatShortcutLabel("reset"))}" aria-label="${t("resetSelection")}">${resetButtonMarkup(t("resetSelection"))}</button>
           </div>
           <button class="ytal-timeline-track" id="ytal-timeline-track" type="button" aria-label="${t("timelineHint")}" role="slider">
@@ -2457,6 +3141,14 @@
     rootEl.classList.toggle("ytal-in-fullscreen", rootMountEl !== document.body);
     syncToastMountTarget();
     schedulePlacementUpdate();
+
+    document
+      .getElementById("ytal-countdown-select")
+      .addEventListener("change", async (e) => {
+        countdownMode = normalizeCountdownMode(e.target.value);
+        await saveUiState();
+        updateUI();
+      });
 
     document
       .getElementById("ytal-toggle-collapse")
@@ -2701,35 +3393,23 @@
 
   function startWatcher() {
     stopWatcher();
+    bindVideoLoopEvents();
 
     intervalId = window.setInterval(() => {
       const video = getVideo();
       if (!video) return;
 
+      if (boundVideoEl !== video) {
+        bindVideoLoopEvents();
+      }
+
       if (activeSegmentId === null) {
         defaultPlaybackRate = normalizePlaybackRate(video.playbackRate);
       }
 
-      if (
-        isPlaylistLooping &&
-        typeof pointA === "number" &&
-        typeof pointB === "number" &&
-        pointB > pointA &&
-        video.currentTime >= pointB
-      ) {
-        advancePlaylistLoop();
+      if (handleLoopBoundary(video)) {
+        updateUI();
         return;
-      }
-
-      if (
-        isLooping &&
-        typeof pointA === "number" &&
-        typeof pointB === "number" &&
-        pointB > pointA &&
-        video.currentTime >= pointB
-      ) {
-        video.currentTime = pointA;
-        video.play().catch(() => {});
       }
 
       updateUI();
@@ -2740,6 +3420,11 @@
     if (intervalId !== null) {
       window.clearInterval(intervalId);
       intervalId = null;
+    }
+
+    if (boundVideoEl) {
+      boundVideoEl.removeEventListener("ended", handleVideoEnded);
+      boundVideoEl = null;
     }
   }
 
@@ -2781,6 +3466,11 @@
       toastEl = null;
     }
 
+    if (countdownOverlayEl) {
+      countdownOverlayEl.remove();
+      countdownOverlayEl = null;
+    }
+
     if (inlineLauncherEl) {
       inlineLauncherEl.remove();
       inlineLauncherEl = null;
@@ -2818,6 +3508,7 @@
   }
 
   async function init() {
+    await migrateFromLocalStorage();
     await loadUiState();
     currentVideoId = getVideoId();
     initDefaultABPoints();
@@ -2865,8 +3556,17 @@
 
   function bindStorageEvents() {
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "local" || !changes[STORAGE_UI_KEY]) return;
-      handleUiStoreChange(changes[STORAGE_UI_KEY].newValue || {});
+      if (areaName !== "sync") return;
+
+      if (changes[STORAGE_UI_KEY]) {
+        handleUiStoreChange(changes[STORAGE_UI_KEY].newValue || {});
+      }
+
+      const videoId = getVideoId();
+      if (videoId && changes[STORAGE_SEG_PREFIX + videoId]) {
+        renderSegments();
+        updateUI();
+      }
     });
   }
 
