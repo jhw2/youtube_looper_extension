@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Looper - AB Repeat, Save & Loop Segments",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Repeat YouTube segments, save & loop them in order, adjust playback speed for practice. Syncs across devices via Google account.",
   "icons": {
     "16": "icons/icon16.png",

@@ -39,6 +39,7 @@
   let isPlaylistLooping = false;
   let isPlaylistAdvancing = false;
   let draggedSegmentId = null;
+  let segmentsRendering = false;
   let intervalId = null;
   let boundVideoEl = null;
   let currentVideoId = null;
@@ -1434,6 +1435,13 @@
 
     isLooping = !isLooping;
 
+    if (!isLooping) {
+      countdownRunId += 1;
+      isCountdownActive = false;
+      countdownOverlayMessage = "";
+      isLoopRestartPending = false;
+    }
+
     if (isLooping) {
       const video = getVideo();
       if (video) {
@@ -1782,6 +1790,9 @@
 
   // ── Render ──
   async function renderSegments() {
+    if (segmentsRendering) return;
+    segmentsRendering = true;
+    try {
     const list = document.getElementById("ytal-segment-list");
     const toolbar = document.getElementById("ytal-segment-toolbar");
     if (!list) return;
@@ -2136,6 +2147,9 @@
     });
 
     schedulePlacementUpdate();
+    } finally {
+      segmentsRendering = false;
+    }
   }
 
   function updateUI() {
