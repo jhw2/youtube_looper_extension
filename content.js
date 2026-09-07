@@ -1963,7 +1963,6 @@
           e.stopPropagation();
           if (e.key === "Enter") {
             e.preventDefault();
-            await commitTitleChange();
             titleInput.blur();
           } else if (e.key === "Escape") {
             e.preventDefault();
@@ -2039,7 +2038,6 @@
           e.stopPropagation();
           if (e.key === "Enter") {
             e.preventDefault();
-            await commitPlaybackRateChange();
             speedInput.blur();
           } else if (e.key === "Escape") {
             e.preventDefault();
@@ -3393,7 +3391,8 @@
       pointB = video.duration;
     } else if (video) {
       const onDuration = () => {
-        if (Number.isFinite(video.duration) && video.duration > 0 && pointB === null) {
+        if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+        if (pointB === null) {
           pointB = video.duration;
           updateUI();
         }
