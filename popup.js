@@ -43,6 +43,7 @@ const texts = {
     shortcutStatusIdle: "바꾸면 바로 저장됩니다.",
     shortcutStatusSaved: (label, key) => `${label} 단축키를 ${key}(으)로 저장했어요.`,
     shortcutStatusReset: "기본 단축키로 되돌렸어요.",
+    kofi: "☕ 커피 한 잔 사주기",
     shortcutActions: {
       setPointA: "시작점",
       setPointB: "끝점",
@@ -63,6 +64,7 @@ const texts = {
     shortcutStatusIdle: "Changes are saved right away.",
     shortcutStatusSaved: (label, key) => `Saved ${label} as ${key}.`,
     shortcutStatusReset: "Restored the default shortcuts.",
+    kofi: "☕ Buy me a coffee",
     shortcutActions: {
       setPointA: "Start point",
       setPointB: "End point",
@@ -231,6 +233,7 @@ function renderStaticText() {
   document.getElementById("popup-sync-note").textContent = uiText.syncNote;
   document.getElementById("popup-shortcut-label").textContent = uiText.shortcutLabel;
   document.getElementById("popup-shortcut-desc").textContent = uiText.shortcutDesc;
+  document.getElementById("popup-kofi").textContent = uiText.kofi;
 }
 
 async function initPopup() {

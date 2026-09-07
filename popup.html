@@ -44,13 +44,13 @@
       }
 
       .shell {
-        padding: 16px;
+        padding: 12px;
       }
 
       .card {
         border: 1px solid var(--border);
         border-radius: 20px;
-        padding: 18px;
+        padding: 14px 18px;
         background: var(--card);
         box-shadow: var(--shadow);
         backdrop-filter: blur(10px);
@@ -172,15 +172,15 @@
       }
 
       .sync-note {
-        margin: 12px 0 0;
+        margin: 8px 0 0;
         font-size: 11px;
         color: var(--soft);
         text-align: center;
       }
 
       .shortcut-card {
-        margin-top: 14px;
-        padding: 14px;
+        margin-top: 10px;
+        padding: 10px 14px 12px;
         border-radius: 16px;
         background: var(--panel);
         border: 1px solid var(--border);
@@ -206,12 +206,12 @@
       }
 
       .shortcut-desc {
-        margin-bottom: 12px;
+        margin-bottom: 8px;
       }
 
       .shortcut-list {
         display: grid;
-        gap: 10px;
+        gap: 6px;
       }
 
       .shortcut-row {
@@ -255,8 +255,8 @@
       }
 
       .shortcut-loop-all {
-        margin-top: 12px;
-        padding-top: 12px;
+        margin-top: 8px;
+        padding-top: 8px;
         border-top: 1px solid var(--border);
       }
 
@@ -270,7 +270,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        margin-top: 12px;
+        margin-top: 8px;
       }
 
       .shortcut-status {
@@ -294,6 +294,22 @@
       .shortcut-reset-btn:hover {
         background: var(--panel-hover);
         border-color: var(--border-strong);
+      }
+
+      .kofi-link {
+        display: block;
+        margin-top: 10px;
+        text-align: center;
+        font-size: 11px;
+        color: var(--soft);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-color: rgba(255, 255, 255, 0.15);
+        transition: color 0.15s ease;
+      }
+
+      .kofi-link:hover {
+        color: var(--muted);
       }
     </style>
   </head>
@@ -328,6 +344,7 @@
             <button id="popup-shortcut-reset" class="shortcut-reset-btn" type="button"></button>
           </div>
         </div>
+        <a id="popup-kofi" class="kofi-link" href="https://ko-fi.com/jinhw" target="_blank"></a>
       </div>
     </div>
 
