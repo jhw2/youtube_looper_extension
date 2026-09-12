@@ -1048,29 +1048,33 @@
 
     const segmentsStore = local[STORAGE_SEGMENTS_KEY];
     if (segmentsStore && typeof segmentsStore === "object") {
-      let allMigrated = true;
+      const remainingSegments = { ...segmentsStore };
       for (const [videoId, segments] of Object.entries(segmentsStore)) {
-        if (!Array.isArray(segments) || segments.length === 0) continue;
+        if (!Array.isArray(segments)) continue;
         const syncKey = STORAGE_SEG_PREFIX + videoId;
-        const existing = await new Promise((resolve) =>
-          chrome.storage.sync.get([syncKey], (result) => resolve(result[syncKey]))
-        );
-        if (!existing?.length) {
-          try {
-            await new Promise((resolve, reject) =>
-              chrome.storage.sync.set({ [syncKey]: segments.map(serializeSegment) }, () => {
-                if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-                else resolve();
-              })
-            );
-          } catch {
-            // quota exceeded — leave this video in local storage
-            allMigrated = false;
-          }
+        const compact = segments.map(deserializeSegment).map(serializeSegment);
+        try {
+          await new Promise((resolve, reject) =>
+            chrome.storage.sync.set({ [syncKey]: compact }, () => {
+              if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+              else resolve();
+            })
+          );
+          delete remainingSegments[videoId];
+        } catch {
+          // quota exceeded — leave this video in local storage
         }
       }
-      if (allMigrated) {
+
+      if (Object.keys(remainingSegments).length === 0) {
         keysToRemove.push(STORAGE_SEGMENTS_KEY);
+      } else {
+        await new Promise((resolve) =>
+          chrome.storage.local.set(
+            { [STORAGE_SEGMENTS_KEY]: remainingSegments },
+            resolve
+          )
+        );
       }
     }
 
@@ -1221,6 +1225,16 @@
   async function getCurrentVideoSegments() {
     const videoId = getVideoId();
     if (!videoId) return [];
+
+    const localSegments = await new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_SEGMENTS_KEY], (result) => {
+        resolve(result[STORAGE_SEGMENTS_KEY]?.[videoId]);
+      });
+    });
+    if (Array.isArray(localSegments)) {
+      return localSegments.map(deserializeSegment);
+    }
+
     return new Promise((resolve) => {
       chrome.storage.sync.get([STORAGE_SEG_PREFIX + videoId], (result) => {
         const raw = result[STORAGE_SEG_PREFIX + videoId];
@@ -1240,6 +1254,27 @@
           else resolve();
         });
       });
+
+      const localStore = await new Promise((resolve) =>
+        chrome.storage.local.get([STORAGE_SEGMENTS_KEY], (result) =>
+          resolve(result[STORAGE_SEGMENTS_KEY] || {})
+        )
+      );
+      if (Object.prototype.hasOwnProperty.call(localStore, videoId)) {
+        delete localStore[videoId];
+        if (Object.keys(localStore).length === 0) {
+          await new Promise((resolve) =>
+            chrome.storage.local.remove(STORAGE_SEGMENTS_KEY, resolve)
+          );
+        } else {
+          await new Promise((resolve) =>
+            chrome.storage.local.set(
+              { [STORAGE_SEGMENTS_KEY]: localStore },
+              resolve
+            )
+          );
+        }
+      }
     } catch {
       // Sync quota exceeded — persist locally so data isn't lost
       const store = await new Promise((resolve) =>
