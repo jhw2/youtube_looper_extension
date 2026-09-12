@@ -33,6 +33,7 @@
 
   let pointA = null;
   let pointB = null;
+  let isDefaultABRange = false;
   let activeSegmentId = null;
   let activeSegmentTitle = "";
   let isLooping = false;
@@ -539,16 +540,14 @@
       return true;
     }
 
-    return Boolean(
-      document.querySelector(
-        [
-          ".video-ads.ytp-ad-module",
-          ".ytp-ad-player-overlay",
-          ".ytp-ad-preview-container",
-          ".ytp-ad-text",
-        ].join(", ")
-      )
-    );
+    return [
+      ".ytp-ad-player-overlay",
+      ".ytp-ad-preview-container",
+      ".ytp-ad-text",
+    ].some((selector) => {
+      const element = document.querySelector(selector);
+      return Boolean(element && element.getClientRects().length > 0);
+    });
   }
 
   function getLoopEndBuffer(video) {
@@ -1396,6 +1395,7 @@
       transientStatusTone = "neutral";
       pointA = clampedStart;
       pointB = clampedEnd;
+      isDefaultABRange = false;
       stopLoop();
     }
 
@@ -1493,6 +1493,7 @@
     activeSegmentTitle = "";
     pointA = video.currentTime;
     pointB = null;
+    isDefaultABRange = false;
     stopLoop();
 
     updateUI();
@@ -1518,6 +1519,7 @@
     activeSegmentId = null;
     activeSegmentTitle = "";
     pointB = video.currentTime;
+    isDefaultABRange = false;
 
     if (pointB <= pointA) {
       pointB = pointA + MIN_GAP;
@@ -1545,6 +1547,7 @@
     // Round to storage precision (0.1s) so isSegmentActive and duplicate checks stay consistent
     pointA = Math.round(pointA * 10) / 10;
     pointB = Math.round(pointB * 10) / 10;
+    isDefaultABRange = false;
 
     const segments = await getCurrentVideoSegments();
     const existingIndex = segments.findIndex(
@@ -1723,6 +1726,7 @@
     activeSegmentTitle = segment.title;
     pointA = segment.start;
     pointB = segment.end;
+    isDefaultABRange = false;
     applyPlaybackRate(getSegmentPlaybackRate(segment));
     seekTo(segment.start);
     if (fromPlaylist && video) {
@@ -3192,6 +3196,7 @@
 
     function startDrag(mode, e) {
       dragMode = mode;
+      isDefaultABRange = false;
       document.body.style.userSelect = "none";
       if (mode === "markerA") markerAEl.classList.add("dragging");
       if (mode === "markerB") markerBEl.classList.add("dragging");
@@ -3386,22 +3391,31 @@
   // ── Watcher ──
   function initDefaultABPoints() {
     pointA = 0;
+    pointB = null;
+    isDefaultABRange = true;
     const video = getVideo();
-    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+    if (
+      video &&
+      !isAdShowing() &&
+      Number.isFinite(video.duration) &&
+      video.duration > 0
+    ) {
       pointB = video.duration;
-    } else if (video) {
-      const onDuration = () => {
-        if (!Number.isFinite(video.duration) || video.duration <= 0) return;
-        if (pointB === null) {
-          pointB = video.duration;
-          updateUI();
-        }
-        video.removeEventListener("durationchange", onDuration);
-        video.removeEventListener("loadedmetadata", onDuration);
-      };
-      video.addEventListener("durationchange", onDuration);
-      video.addEventListener("loadedmetadata", onDuration);
     }
+  }
+
+  function syncDefaultABRange(video) {
+    if (
+      !isDefaultABRange ||
+      isAdShowing() ||
+      !Number.isFinite(video?.duration) ||
+      video.duration <= 0
+    ) {
+      return;
+    }
+
+    pointA = 0;
+    pointB = video.duration;
   }
 
   function startWatcher() {
@@ -3415,6 +3429,8 @@
       if (boundVideoEl !== video) {
         bindVideoLoopEvents();
       }
+
+      syncDefaultABRange(video);
 
       if (activeSegmentId === null) {
         defaultPlaybackRate = normalizePlaybackRate(video.playbackRate);
@@ -3448,6 +3464,7 @@
     activeSegmentTitle = "";
     pointA = null;
     pointB = null;
+    isDefaultABRange = false;
     isLooping = false;
     isPlaylistLooping = false;
     isPlaylistAdvancing = false;
