@@ -43,6 +43,7 @@ const texts = {
     shortcutStatusIdle: "바꾸면 바로 저장됩니다.",
     shortcutStatusSaved: (label, key) => `${label} 단축키를 ${key}(으)로 저장했어요.`,
     shortcutStatusReset: "기본 단축키로 되돌렸어요.",
+    shortcutStatusFailed: "단축키를 저장하지 못했어요. 다시 시도해 주세요.",
     kofi: "☕ 커피 한 잔 사주기",
     shortcutActions: {
       setPointA: "시작점",
@@ -53,24 +54,25 @@ const texts = {
     },
   },
   en: {
-    openYoutube: "Start on YouTube",
-    openWeb: "Open Web Version",
-    syncNote: "Syncs across devices via Google account",
-    shortcutLabel: "Shortcut Setup",
-    shortcutDesc: "Pick the letter you want and it saves right away.",
+    openYoutube: "Open YouTube",
+    openWeb: "Open web version",
+    syncNote: "Syncs across devices when Chrome sync is enabled.",
+    shortcutLabel: "Keyboard shortcuts",
+    shortcutDesc: "Choose a letter for each action. Changes save automatically.",
     shortcutLoopAll: (shortcut) => `Loop all segments: Shift + ${shortcut}`,
-    shortcutMeta: "Loading saved segments still uses the 1-9 number keys.",
+    shortcutMeta: "Press 1–9 to load saved segments in list order.",
     shortcutReset: "Restore defaults",
-    shortcutStatusIdle: "Changes are saved right away.",
-    shortcutStatusSaved: (label, key) => `Saved ${label} as ${key}.`,
-    shortcutStatusReset: "Restored the default shortcuts.",
+    shortcutStatusIdle: "Changes save automatically.",
+    shortcutStatusSaved: (label, key) => `Shortcut for “${label}” set to ${key}.`,
+    shortcutStatusReset: "Default shortcuts restored.",
+    shortcutStatusFailed: "Could not save shortcuts. Please try again.",
     kofi: "☕ Buy me a coffee",
     shortcutActions: {
       setPointA: "Start point",
       setPointB: "End point",
-      loop: "Loop range",
-      save: "Save",
-      reset: "Reset",
+      loop: "Loop segment",
+      save: "Save segment",
+      reset: "Reset selection",
     },
   },
 };
@@ -85,16 +87,23 @@ function detectDefaultLang() {
 }
 
 function getUiStore() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     chrome.storage.sync.get([STORAGE_UI_KEY], (result) => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+        return;
+      }
       resolve(result[STORAGE_UI_KEY] || {});
     });
   });
 }
 
 function setUiStore(store) {
-  return new Promise((resolve) => {
-    chrome.storage.sync.set({ [STORAGE_UI_KEY]: store }, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.set({ [STORAGE_UI_KEY]: store }, () => {
+      if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+      else resolve();
+    });
   });
 }
 
@@ -188,10 +197,11 @@ function renderShortcutEditor() {
       const nextValue = normalizeShortcutValue(select.value);
       if (!action || !nextValue) return;
 
-      await saveShortcuts({
+      const saved = await saveShortcuts({
         ...shortcuts,
         [action]: nextValue,
       });
+      if (!saved) return;
 
       renderShortcutEditor();
       setStatus(
@@ -212,14 +222,21 @@ function renderShortcutEditor() {
 }
 
 async function saveShortcuts(nextShortcuts) {
-  const store = await getUiStore();
-  store.shortcuts = sanitizeShortcutConfig(nextShortcuts);
-  await setUiStore(store);
-  shortcuts = store.shortcuts;
+  try {
+    const store = await getUiStore();
+    store.shortcuts = sanitizeShortcutConfig(nextShortcuts);
+    await setUiStore(store);
+    shortcuts = store.shortcuts;
+    return true;
+  } catch {
+    renderShortcutEditor();
+    setStatus(texts[currentLang].shortcutStatusFailed, "neutral");
+    return false;
+  }
 }
 
 async function resetShortcuts() {
-  await saveShortcuts(DEFAULT_SHORTCUTS);
+  if (!await saveShortcuts(DEFAULT_SHORTCUTS)) return;
   renderShortcutEditor();
   setStatus(texts[currentLang].shortcutStatusReset, "success");
   trackAnalyticsEvent("popup_shortcuts_reset");

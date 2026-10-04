@@ -204,110 +204,110 @@
       tipSegment: "단축키:",
     },
     en: {
-      timelineHint: "Drag markers to adjust range",
-      timelineStatusEmpty: "Drag the A·B markers to set your range",
-      timelineStatusAwaitEnd: "Drag the B marker to set the end",
-      timelineStatusReady: "Drag markers to adjust the range",
+      timelineHint: "Drag the markers to adjust the range",
+      timelineStatusEmpty: "Drag the A and B markers to set the range",
+      timelineStatusAwaitEnd: "Drag the B marker to set the end point",
+      timelineStatusReady: "Drag the markers to adjust the range",
       resetSelection: "Reset selection",
       resetSelectionDesc: "Clear the current A-B range",
-      loop: "Play Loop",
-      loopCurrent: "Loop Range",
+      loop: "Loop segment",
+      loopCurrent: "Loop segment",
       loopSelected: (title) => `Loop ${title}`,
-      loopingCurrent: "Looping Range...",
+      loopingCurrent: "Looping segment...",
       loopingSelected: (title) => `Looping ${title}...`,
-      loopDesc: "Repeat the range you just set",
-      loopCurrentDesc: "Loop only the range you just set",
+      loopDesc: "Repeat the selected segment",
+      loopCurrentDesc: "Repeat the selected segment",
       loopSelectedDesc: (title) => `Loop only ${title}`,
-      save: "Save to List",
-      saveDesc: "Recall it later",
-      rangeSummaryPending: "Once you select a range, the start and end times will appear here.",
-      rangeSummaryReady: (start, end) => `${start} ~ ${end}`,
-      toastRangeUpdated: (start, end) => `Segment time updated. ${start} ~ ${end}`,
+      save: "Save segment",
+      saveDesc: "Save for later",
+      rangeSummaryPending: "Select a segment to see its start and end times.",
+      rangeSummaryReady: (start, end) => `${start}–${end}`,
+      toastRangeUpdated: (start, end) => `Segment times updated. ${start}–${end}`,
       toastRangeInvalid: "Invalid time format. Try 12.5 or 1:23.4.",
-      savedNotice: "Saved. Press 'Play Loop' to start looping it.",
-      toastPointA: (time) => `Loop start marked. A = ${time}`,
-      toastPointB: (time) => `Loop end marked. B = ${time}`,
+      savedNotice: "Segment saved. You can loop it now or select another segment.",
+      toastPointA: (time) => `Start point set to ${time} (A).`,
+      toastPointB: (time) => `End point set to ${time} (B).`,
       toastSegmentSaved: (title, start, end, shortcut) =>
         shortcut
-          ? `Saved ${title}. ${start} ~ ${end}. Load: ${shortcut}. Number shortcuts follow the current list order. Speed: + / -`
-          : `Saved ${title}. ${start} ~ ${end}. Speed: + / -`,
+          ? `Saved ${title}. ${start}–${end}. Press ${shortcut} to load. Number keys follow the list order. Speed: + / -`
+          : `Saved ${title}. ${start}–${end}. Speed: + / -`,
       toastSegmentExists: (index, title, start, end) =>
-        `This range is already saved as ${index}. ${title} · ${start} ~ ${end}`,
-      toastLoopOn: (start, end) => `AB loop started. ${start} ~ ${end}`,
-      toastLoopOff: "AB loop stopped.",
-      playlistLoop: "Loop All Segments",
-      playlistLooping: "Looping All Segments...",
-      playlistLoopDesc: "Loop saved segments from the beginning in order",
+        `Already saved: ${index}. ${title} · ${start}–${end}`,
+      toastLoopOn: (start, end) => `Loop started. ${start}–${end}`,
+      toastLoopOff: "Loop stopped.",
+      playlistLoop: "Loop all segments",
+      playlistLooping: "Looping all segments...",
+      playlistLoopDesc: "Repeat all saved segments in list order",
       playlistEmpty: "Save at least one segment to start looping all segments.",
-      toastPlaylistLoopOn: "Looping all saved segments started.",
-      toastPlaylistLoopOff: "Looping all segments stopped.",
+      toastPlaylistLoopOn: "Now looping all saved segments.",
+      toastPlaylistLoopOff: "Stopped looping all segments.",
       toastPlaylistToLoopOn: (start, end) =>
-        `Looping all segments ended and AB loop started for the current range. ${start} ~ ${end}`,
+        `Switched to looping the current segment. ${start}–${end}`,
       toastShortcutsIntro: (setA, setB, loop, loopAll, save, reset) =>
-        `Shortcuts: ${setA} (start), ${setB} (end), ${loop} (loop range), ${loopAll} (loop all segments), ${save} (save), 1-9 (load by current list order), ${reset} (reset), + / - (segment speed), Alt + = / - / Arrow / 0 (zoom)`,
-      savedSegments: "Saved Segments",
+        `Shortcuts: ${setA} (start), ${setB} (end), ${loop} (loop segment), ${loopAll} (loop all segments), ${save} (save), 1-9 (load segments in list order), ${reset} (reset), + / - (segment speed), Alt + = / - / arrow keys / 0 (zoom)`,
+      savedSegments: "Saved segments",
       shortcuts: "Shortcuts",
-      hideShortcuts: "Hide Shortcuts",
-      zoomSection: "View Helper",
+      hideShortcuts: "Hide shortcuts",
+      zoomSection: "Video controls",
       zoomToggle: "Zoom",
-      zoomHide: "Hide Zoom",
-      zoomLabel: "Video Zoom",
-      zoomViewportLabel: "Current View",
-      zoomViewportEmpty: "When zoomed in, this shows where you are inside the full frame.",
+      zoomHide: "Hide zoom controls",
+      zoomLabel: "Video zoom",
+      zoomViewportLabel: "Current view",
+      zoomViewportEmpty: "Zoom in to see which part of the video you are viewing.",
       zoomViewportHint: "Full-frame reference",
       zoomViewportZoom: (value) => `${Math.round(value * 100)}% zoom`,
-      zoomViewportGuide: "Click or drag the minimap to move the view",
-      countdownLabel: "Count",
+      zoomViewportGuide: "Click or drag the preview to adjust the view",
+      countdownLabel: "Countdown",
       countdownOff: "Off",
       countdownSeconds: (value) => `${value}s`,
       countdownStartingIn: (value) => `Starting in ${value}`,
       countdownStartingNow: "Start",
-      zoomIn: "Zoom In",
-      zoomOut: "Zoom Out",
+      zoomIn: "Zoom in",
+      zoomOut: "Zoom out",
       zoomReset: "Reset",
       zoomResetDesc: "Reset zoom and position",
-      zoomPosition: "Move Frame",
+      zoomPosition: "Move view",
       panUp: "Up",
       panDown: "Down",
       panLeft: "Left",
       panRight: "Right",
       zoomValue: (value) => `${Math.round(value * 100)}%`,
       noSegments: "No saved segments yet.",
-      emptyGuide: "Drag the A·B markers on the timeline, or use the A and B keys, to set your range, then use Loop or Save.",
+      emptyGuide: "Set a segment with the A and B markers or your start and end shortcuts, then loop or save it.",
       delete: "Delete",
       editTitle: "Edit name",
       editTitlePlaceholder: "Segment name",
-      toastSetAB: "Please set A and B points first.",
-      toastSetA: "Please set point A first.",
-      toastNoSegment: "No A-B segment to save.",
-      toastNoActive: "No active segment to delete.",
-      toastNoActiveSaved: "No active saved segment.",
-      toastEmptyName: "Name cannot be empty.",
+      toastSetAB: "Set the start (A) and end (B) points first.",
+      toastSetA: "Set the start point (A) first.",
+      toastNoSegment: "Set a valid segment before saving.",
+      toastNoActive: "Select a saved segment to delete.",
+      toastNoActiveSaved: "Select a saved segment first.",
+      toastEmptyName: "Enter a segment name.",
       toastTitleUpdated: "Segment name updated.",
       speedDown: "Decrease speed",
       speedUp: "Increase speed",
-      speedInput: "Type playback speed",
+      speedInput: "Enter playback speed",
       reorder: "Reorder",
       speedValue: (value) => `${value}x`,
       segmentDefault: (n) => `Segment ${n}`,
       toastSegmentsReordered: "Saved segments reordered.",
-      toastSpeedInvalid: "Enter a playback rate between 0.05 and 16.",
+      toastSpeedInvalid: "Enter a playback speed between 0.05x and 16x.",
       toastSpeedUpdated: (value) => `Playback speed set to ${value}x.`,
-      helpSetA: "Set A point",
-      helpSetB: "Set B point",
-      helpLoop: "Toggle range loop",
-      helpPlaylistLoop: "Toggle loop all segments",
+      helpSetA: "Set start point (A)",
+      helpSetB: "Set end point (B)",
+      helpLoop: "Turn segment looping on or off",
+      helpPlaylistLoop: "Turn looping for all segments on or off",
       helpReset: "Reset selection",
       helpSave: "Save segment",
-      helpLoad: "Load segment (current list order)",
-      helpSpeed: "Adjust active segment speed",
-      helpDelete: "Delete active",
+      helpLoad: "Load a saved segment (in list order)",
+      helpSpeed: "Adjust the selected segment’s speed",
+      helpDelete: "Delete the selected segment",
       helpStop: "Stop loop",
       helpZoom: "Zoom video in or out",
       helpPan: "Pan the zoomed video",
       helpZoomReset: "Reset video zoom",
-      tipLoop: (shortcut) => `Play Loop (${shortcut})`,
-      tipSave: (shortcut) => `Save to List (${shortcut})`,
+      tipLoop: (shortcut) => `Loop segment (${shortcut})`,
+      tipSave: (shortcut) => `Save segment (${shortcut})`,
       tipReset: (shortcut) => `Reset selection (${shortcut})`,
       tipPanelOpen: "Open saved segments panel",
       tipPanelClose: "Hide panel",
@@ -1011,8 +1011,12 @@
 
   // ── Storage ──
   function getUiStore() {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       chrome.storage.sync.get([STORAGE_UI_KEY], (result) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+          return;
+        }
         resolve(result[STORAGE_UI_KEY] || {});
       });
     });
@@ -1035,15 +1039,18 @@
     const keysToRemove = [];
 
     if (local[STORAGE_UI_KEY]) {
-      const syncUi = await getUiStore();
-      if (!Object.keys(syncUi).length) {
-        try {
-          await setUiStore(local[STORAGE_UI_KEY]);
-        } catch {
-          // ignore quota errors during migration
+      try {
+        const syncUi = await getUiStore();
+        const mergedUi = { ...local[STORAGE_UI_KEY], ...syncUi };
+        if (Object.keys(local[STORAGE_UI_KEY]).some((key) =>
+          !Object.prototype.hasOwnProperty.call(syncUi, key)
+        )) {
+          await setUiStore(mergedUi);
         }
+        keysToRemove.push(STORAGE_UI_KEY);
+      } catch {
+        // Keep the original settings so a later initialization can retry.
       }
-      keysToRemove.push(STORAGE_UI_KEY);
     }
 
     const segmentsStore = local[STORAGE_SEGMENTS_KEY];
@@ -1289,7 +1296,7 @@
       showToast(
         lang === "ko"
           ? "동기화 용량이 꽉 찼습니다. 이 기기에만 저장됩니다."
-          : "Sync quota exceeded. Saved locally only.",
+          : "Could not sync. Saved on this device only.",
         "neutral",
         4000
       );
