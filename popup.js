@@ -44,7 +44,8 @@ const texts = {
     shortcutStatusSaved: (label, key) => `${label} 단축키를 ${key}(으)로 저장했어요.`,
     shortcutStatusReset: "기본 단축키로 되돌렸어요.",
     shortcutStatusFailed: "단축키를 저장하지 못했어요. 다시 시도해 주세요.",
-    kofi: "☕ 커피 한 잔 사주기",
+    settingsLoadFailed: "설정을 불러오지 못해 기본값을 표시합니다. 팝업을 다시 열어 주세요.",
+    sponsor: "♡ 개발자 후원하기",
     shortcutActions: {
       setPointA: "시작점",
       setPointB: "끝점",
@@ -66,7 +67,8 @@ const texts = {
     shortcutStatusSaved: (label, key) => `Shortcut for “${label}” set to ${key}.`,
     shortcutStatusReset: "Default shortcuts restored.",
     shortcutStatusFailed: "Could not save shortcuts. Please try again.",
-    kofi: "☕ Buy me a coffee",
+    settingsLoadFailed: "Could not load settings. Showing defaults. Please reopen the popup.",
+    sponsor: "♡ Sponsor on GitHub",
     shortcutActions: {
       setPointA: "Start point",
       setPointB: "End point",
@@ -250,11 +252,15 @@ function renderStaticText() {
   document.getElementById("popup-sync-note").textContent = uiText.syncNote;
   document.getElementById("popup-shortcut-label").textContent = uiText.shortcutLabel;
   document.getElementById("popup-shortcut-desc").textContent = uiText.shortcutDesc;
-  document.getElementById("popup-kofi").textContent = uiText.kofi;
+  document.getElementById("popup-sponsor").textContent = uiText.sponsor;
 }
 
 async function initPopup() {
-  const store = await getUiStore();
+  let loadFailed = false;
+  const store = await getUiStore().catch(() => {
+    loadFailed = true;
+    return {};
+  });
 
   currentLang =
     store.lang === "ko" || store.lang === "en"
@@ -264,7 +270,9 @@ async function initPopup() {
 
   renderStaticText();
   renderShortcutEditor();
-  setStatus(texts[currentLang].shortcutStatusIdle);
+  setStatus(loadFailed
+    ? texts[currentLang].settingsLoadFailed
+    : texts[currentLang].shortcutStatusIdle);
 
   trackAnalyticsEvent("popup_opened", {
     ui_language: currentLang,

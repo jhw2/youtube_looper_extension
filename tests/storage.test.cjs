@@ -107,3 +107,76 @@ for (const failure of ['failRead', 'failWrite', null]) {
     else assert.equal(h.sync[UI_KEY].shortcuts.loop, 'K');
   });
 }
+
+test('content settings read failure uses defaults without writing storage', async () => {
+  const h = harness({ syncUi: { lang: 'en', videoZoom: 2 }, failRead: true });
+  loadMigration(h.context);
+  Object.assign(h.context, {
+    detectDefaultLang: () => 'ko',
+    normalizeVideoZoom: (value) => value ?? 1,
+    normalizeVideoPan: (value) => value ?? 0,
+    normalizeCountdownMode: (value) => value ?? 'off',
+    sanitizeShortcutConfig: (value) => value ?? { loop: 'L' },
+  });
+  vm.runInContext(between(read('content.js'), '  async function loadUiState()', '  function handleUiStoreChange'), h.context);
+  await h.context.loadUiState();
+  assert.equal(h.context.lang, 'ko');
+  assert.equal(h.context.videoZoom, 1);
+  assert.equal(h.writes(), 0);
+  assert.equal(h.sync[UI_KEY].videoZoom, 2);
+});
+
+test('popup opens with defaults and a warning when settings cannot be read', async () => {
+  const h = harness({ syncUi: { lang: 'en' }, failRead: true });
+  const rendered = [];
+  Object.assign(h.context, {
+    detectDefaultLang: () => 'ko',
+    sanitizeShortcutConfig: (value) => value ?? { loop: 'L' },
+    renderStaticText: () => rendered.push('text'),
+    renderShortcutEditor: () => rendered.push('editor'),
+    setStatus: (value) => rendered.push(value),
+    texts: { ko: { settingsLoadFailed: 'load failed', shortcutStatusIdle: 'idle' } },
+    trackAnalyticsEvent: () => {},
+  });
+  const source = read('popup.js');
+  vm.runInContext(between(source, 'function getUiStore()', 'function normalizeShortcutValue'), h.context);
+  vm.runInContext(between(source, 'async function initPopup()', '\ndocument.getElementById("popup-shortcut-reset")'), h.context);
+  await h.context.initPopup();
+  assert.deepEqual(rendered, ['text', 'editor', 'load failed']);
+  assert.equal(h.writes(), 0);
+});
+
+test('panel initializes and starts its watcher even when sync reads fail', async () => {
+  const h = harness({ failRead: true });
+  const list = { textContent: '' };
+  const calls = [];
+  Object.assign(h.context, {
+    detectDefaultLang: () => 'en',
+    normalizeVideoZoom: (value) => value ?? 1,
+    normalizeVideoPan: (value) => value ?? 0,
+    normalizeCountdownMode: (value) => value ?? 'off',
+    sanitizeShortcutConfig: (value) => value ?? { loop: 'L' },
+    getVideoId: () => 'test-video',
+    segmentsRendering: false,
+    document: { getElementById: (id) => id === 'ytal-segment-list' ? list : null },
+    t: (key) => key,
+    initDefaultABPoints: () => {},
+    createRoot: () => calls.push('panel'),
+    updateUI: () => {},
+    startWatcher: () => calls.push('watcher'),
+    trackCurrentPageView: () => {},
+    showToast: () => {},
+    getShortcutToastText: () => '',
+  });
+  const source = read('content.js');
+  loadMigration(h.context);
+  vm.runInContext(between(source, '  async function loadUiState()', '  function handleUiStoreChange'), h.context);
+  vm.runInContext(between(source, '  async function getCurrentVideoSegments()', '  async function saveCurrentVideoSegments('), h.context);
+  vm.runInContext(between(source, '  async function renderSegments()', '  function updateUI()'), h.context);
+  vm.runInContext(between(source, '  async function init()', '  function trackCurrentPageView()'), h.context);
+  await h.context.init();
+  assert.deepEqual(calls, ['panel', 'watcher']);
+  assert.equal(list.textContent, 'segmentsLoadFailed');
+  assert.equal(h.context.segmentsRendering, false);
+  assert.equal(h.writes(), 0);
+});

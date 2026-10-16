@@ -157,6 +157,7 @@
       panRight: "오른쪽",
       zoomValue: (value) => `${Math.round(value * 100)}%`,
       noSegments: "아직 저장한 구간이 없습니다.",
+      segmentsLoadFailed: "저장한 구간을 불러오지 못했어요. 페이지를 새로고침해 주세요.",
       emptyGuide: "재생바의 A·B 마커를 드래그하거나 키보드 A·B 키로 구간을 설정한 뒤 루프나 저장을 사용해 보세요.",
       delete: "삭제",
       editTitle: "이름 수정",
@@ -273,6 +274,7 @@
       panRight: "Right",
       zoomValue: (value) => `${Math.round(value * 100)}%`,
       noSegments: "No saved segments yet.",
+      segmentsLoadFailed: "Could not load saved segments. Please refresh the page.",
       emptyGuide: "Set a segment with the A and B markers or your start and end shortcuts, then loop or save it.",
       delete: "Delete",
       editTitle: "Edit name",
@@ -1033,8 +1035,11 @@
 
   async function migrateFromLocalStorage() {
     const local = await new Promise((resolve) => {
-      chrome.storage.local.get([STORAGE_SEGMENTS_KEY, STORAGE_UI_KEY], resolve);
+      chrome.storage.local.get([STORAGE_SEGMENTS_KEY, STORAGE_UI_KEY], (result) => {
+        resolve(chrome.runtime.lastError ? null : result);
+      });
     });
+    if (!local) return;
 
     const keysToRemove = [];
 
@@ -1104,7 +1109,8 @@
   }
 
   async function loadUiState() {
-    const store = await getUiStore();
+    // Defaults are for this session only; never overwrite unread settings.
+    const store = await getUiStore().catch(() => ({}));
     isCollapsed = !!store.isCollapsed;
     isHelpOpen = !!store.isHelpOpen;
     isZoomOpen = !!store.isZoomOpen;
@@ -1233,8 +1239,12 @@
     const videoId = getVideoId();
     if (!videoId) return [];
 
-    const localSegments = await new Promise((resolve) => {
+    const localSegments = await new Promise((resolve, reject) => {
       chrome.storage.local.get([STORAGE_SEGMENTS_KEY], (result) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+          return;
+        }
         resolve(result[STORAGE_SEGMENTS_KEY]?.[videoId]);
       });
     });
@@ -1242,8 +1252,12 @@
       return localSegments.map(deserializeSegment);
     }
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       chrome.storage.sync.get([STORAGE_SEG_PREFIX + videoId], (result) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+          return;
+        }
         const raw = result[STORAGE_SEG_PREFIX + videoId];
         resolve(Array.isArray(raw) ? raw.map(deserializeSegment) : []);
       });
@@ -1351,11 +1365,12 @@
   }
 
   async function runLoopCountdownIfNeeded() {
+    const runId = ++countdownRunId;
     const seconds = Number(normalizeCountdownMode(countdownMode));
     if (!seconds) return true;
 
     const video = getVideo();
-    const runId = ++countdownRunId;
+    const videoId = getVideoId();
     isCountdownActive = true;
     showCountdownOverlay("");
     updateUI();
@@ -1364,16 +1379,12 @@
     for (let value = seconds; value >= 1; value -= 1) {
       showCountdownOverlay(t("countdownStartingIn")(getCountdownOptionLabel(String(value))));
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
-      if (runId !== countdownRunId) {
-        isCountdownActive = false;
-        countdownOverlayMessage = "";
-        updateUI();
-        return false;
-      }
+      if (runId !== countdownRunId || videoId !== getVideoId()) return false;
     }
 
     showCountdownOverlay(t("countdownStartingNow"));
     await new Promise((resolve) => window.setTimeout(resolve, 350));
+    if (runId !== countdownRunId || videoId !== getVideoId()) return false;
     isCountdownActive = false;
     countdownOverlayMessage = "";
     updateUI();
@@ -1383,17 +1394,20 @@
   async function restartLoopWithCountdown(video) {
     if (isLoopRestartPending) return;
     isLoopRestartPending = true;
+    let runId;
 
     try {
       if (video) {
         video.pause();
         video.currentTime = pointA;
       }
-      const canStart = await runLoopCountdownIfNeeded();
+      const countdown = runLoopCountdownIfNeeded();
+      runId = countdownRunId;
+      const canStart = await countdown;
       if (!canStart || !isLooping) return;
       video?.play().catch(() => {});
     } finally {
-      isLoopRestartPending = false;
+      if (runId === countdownRunId) isLoopRestartPending = false;
     }
   }
 
@@ -1491,8 +1505,6 @@
       }
       const canStart = await runLoopCountdownIfNeeded();
       if (!canStart) {
-        isLooping = false;
-        updateUI();
         return;
       }
       if (video) {
@@ -2191,6 +2203,9 @@
     });
 
     schedulePlacementUpdate();
+    } catch {
+      const list = document.getElementById("ytal-segment-list");
+      if (list) list.textContent = t("segmentsLoadFailed");
     } finally {
       segmentsRendering = false;
     }
@@ -3500,6 +3515,10 @@
   }
 
   function teardownRoot() {
+    countdownRunId += 1;
+    isCountdownActive = false;
+    countdownOverlayMessage = "";
+    isLoopRestartPending = false;
     stopWatcher();
     clearFullscreenPeekTimer();
     activeSegmentId = null;
